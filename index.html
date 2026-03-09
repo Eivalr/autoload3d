@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoLoad 3D Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- HEADER -->
+    <header class="header">
+      <div class="header-inner">
+        <div class="logo">
+          <span class="logo-icon">▦</span>
+          <span class="logo-text">AutoLoad<span class="logo-accent">3D</span></span>
+        </div>
+        <nav class="header-nav">
+          <button class="nav-btn active" id="nav-planner" onclick="showSection('planner')">Load Planner</button>
+          <button class="nav-btn" id="nav-about" onclick="showSection('about')">How It Works</button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- PLANNER SECTION -->
+    <main id="section-planner" class="section active">
+      <div class="workspace">
+
+        <!-- LEFT PANEL: Input -->
+        <aside class="panel panel-left">
+          <div class="panel-header">
+            <h2>Load Configuration</h2>
+          </div>
+
+          <!-- Master Reference -->
+          <div class="field-group">
+            <label class="field-label">Master Load Reference</label>
+            <div class="master-ref-row">
+              <input type="text" id="masterRef" class="field-input" placeholder="e.g. MLD-2025-001" />
+              <button class="btn-ghost" onclick="generateMasterRef()">Auto</button>
+            </div>
+          </div>
+
+          <!-- Add Cargo Item -->
+          <div class="field-group">
+            <label class="field-label">Add Cargo Item</label>
+            <div class="cargo-form">
+              <div class="form-row">
+                <div class="form-col">
+                  <label class="sub-label">Shipment ID</label>
+                  <input type="text" id="ci-shipment" class="field-input sm" placeholder="e.g. SHP-001" />
+                </div>
+                <div class="form-col">
+                  <label class="sub-label">Description</label>
+                  <input type="text" id="ci-desc" class="field-input sm" placeholder="e.g. Electronics" />
+                </div>
+              </div>
+              <div class="form-row three">
+                <div class="form-col">
+                  <label class="sub-label">L (cm)</label>
+                  <input type="number" id="ci-l" class="field-input sm" placeholder="120" min="1" />
+                </div>
+                <div class="form-col">
+                  <label class="sub-label">W (cm)</label>
+                  <input type="number" id="ci-w" class="field-input sm" placeholder="80" min="1" />
+                </div>
+                <div class="form-col">
+                  <label class="sub-label">H (cm)</label>
+                  <input type="number" id="ci-h" class="field-input sm" placeholder="100" min="1" />
+                </div>
+              </div>
+              <div class="form-row three">
+                <div class="form-col">
+                  <label class="sub-label">Weight (kg)</label>
+                  <input type="number" id="ci-weight" class="field-input sm" placeholder="50" min="0.1" step="0.1"/>
+                </div>
+                <div class="form-col">
+                  <label class="sub-label">Qty</label>
+                  <input type="number" id="ci-qty" class="field-input sm" placeholder="1" min="1" value="1" />
+                </div>
+                <div class="form-col">
+                  <label class="sub-label">Max Load (kg)</label>
+                  <input type="number" id="ci-maxload" class="field-input sm" placeholder="200" min="0" />
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-col">
+                  <label class="sub-label">Category</label>
+                  <select id="ci-category" class="field-input sm">
+                    <option value="box">Box</option>
+                    <option value="pallet">Pallet</option>
+                    <option value="crate">Crate</option>
+                    <option value="barrel">Barrel</option>
+                    <option value="custom">Custom</option>
+                  </select>
+                </div>
+                <div class="form-col">
+                  <label class="sub-label">Stack Priority</label>
+                  <select id="ci-stackpriority" class="field-input sm">
+                    <option value="3">3 – Strong Base</option>
+                    <option value="2" selected>2 – Medium</option>
+                    <option value="1">1 – Fragile</option>
+                    <option value="0">0 – Do Not Stack</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row checks">
+                <label class="check-label">
+                  <input type="checkbox" id="ci-stackable" checked />
+                  <span>Stackable</span>
+                </label>
+                <label class="check-label">
+                  <input type="checkbox" id="ci-rotatable" checked />
+                  <span>Allow Rotation</span>
+                </label>
+              </div>
+              <button class="btn-primary full-width" onclick="addCargoItem()">+ Add Item</button>
+            </div>
+          </div>
+
+          <!-- CSV Upload -->
+          <div class="field-group">
+            <label class="field-label">Bulk Upload</label>
+            <label class="upload-area" for="csvUpload">
+              <span class="upload-icon">↑</span>
+              <span>Upload CSV</span>
+              <input type="file" id="csvUpload" accept=".csv" onchange="handleCSV(event)" style="display:none"/>
+            </label>
+            <a href="#" onclick="downloadCSVTemplate()" class="link-small">Download CSV template</a>
+          </div>
+
+          <!-- Calculate -->
+          <button class="btn-accent full-width mt" id="calcBtn" onclick="runCalculation()">
+            <span>Calculate Load Plan</span>
+            <span class="btn-icon">→</span>
+          </button>
+        </aside>
+
+        <!-- CENTER: Cargo List + 3D -->
+        <section class="panel panel-center">
+          <!-- Cargo items list -->
+          <div class="cargo-list-wrap" id="cargoListWrap">
+            <div class="panel-header-row">
+              <h3>Cargo Items <span class="badge" id="itemCount">0 items</span></h3>
+              <button class="btn-ghost-sm" onclick="clearAllItems()">Clear all</button>
+            </div>
+            <div id="cargoTable" class="cargo-table">
+              <div class="empty-state">
+                <div class="empty-icon">▦</div>
+                <p>No cargo items added yet.<br/>Start by adding items on the left.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3D Viewer -->
+          <div class="viewer-wrap" id="viewerWrap" style="display:none">
+            <div class="viewer-header">
+              <div class="viewer-title-row">
+                <h3 id="viewerTitle">Load Plan</h3>
+                <div class="container-tabs" id="containerTabs"></div>
+              </div>
+              <div class="viewer-controls">
+                <button class="ctrl-btn" onclick="resetCamera()" title="Reset View">⌖</button>
+                <button class="ctrl-btn" onclick="toggleWireframe()" title="Wireframe">⬚</button>
+                <button class="ctrl-btn" onclick="exportPNG()" title="Export PNG">↓ PNG</button>
+              </div>
+            </div>
+            <div id="threeCanvas" class="three-canvas"></div>
+            <div class="viewer-legend" id="viewerLegend"></div>
+            <p class="viewer-hint">Drag to rotate · Scroll to zoom · Right-click to pan · Hover items for details</p>
+          </div>
+        </section>
+
+        <!-- RIGHT PANEL: Summary -->
+        <aside class="panel panel-right" id="summaryPanel">
+          <div class="panel-header">
+            <h2>Load Summary</h2>
+          </div>
+          <div id="summaryContent" class="summary-empty">
+            <div class="empty-icon">◫</div>
+            <p>Run a calculation to see the load summary here.</p>
+          </div>
+          <div id="summaryActions" style="display:none" class="summary-actions">
+            <button class="btn-primary full-width" onclick="exportPDF()">↓ Download PDF Report</button>
+            <button class="btn-ghost full-width mt-sm" onclick="exportPNG()">↓ Export 3D Snapshot</button>
+          </div>
+        </aside>
+
+      </div>
+    </main>
+
+    <!-- ABOUT SECTION -->
+    <main id="section-about" class="section" style="display:none">
+      <div class="about-wrap">
+        <h1>How AutoLoad 3D Works</h1>
+        <div class="about-grid">
+          <div class="about-card">
+            <div class="about-num">01</div>
+            <h3>Input Your Cargo</h3>
+            <p>Add items manually or upload a CSV. Each item carries its dimensions, weight, shipment reference, and stacking rules.</p>
+          </div>
+          <div class="about-card">
+            <div class="about-num">02</div>
+            <h3>Smart Container Selection</h3>
+            <p>The app automatically picks the smallest suitable container. No manual selection needed. If cargo overflows, it calculates how many containers are required.</p>
+          </div>
+          <div class="about-card">
+            <div class="about-num">03</div>
+            <h3>Realistic Stacking Logic</h3>
+            <p>Items are sorted by weight and stack priority. Heavy, strong items go first. Fragile items are never crushed. Rotation is only applied when allowed.</p>
+          </div>
+          <div class="about-card">
+            <div class="about-num">04</div>
+            <h3>3D Visualization</h3>
+            <p>Rotate, zoom, and inspect your load in real-time 3D. Each shipment is color-coded for instant visual distinction.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Tooltip -->
+    <div id="tooltip" class="tooltip" style="display:none"></div>
+  </div>
+
+  <!-- PDF lib -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
