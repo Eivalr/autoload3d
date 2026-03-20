@@ -1,233 +1,275 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AutoLoad 3D Planner</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <div id="app">
-    <!-- HEADER -->
-    <header class="header">
-      <div class="header-inner">
-        <div class="logo">
-          <span class="logo-icon">▦</span>
-          <span class="logo-text">AutoLoad<span class="logo-accent">3D</span></span>
-        </div>
-        <nav class="header-nav">
-          <button class="nav-btn active" id="nav-planner" onclick="showSection('planner')">Load Planner</button>
-          <button class="nav-btn" id="nav-about" onclick="showSection('about')">How It Works</button>
-        </nav>
-      </div>
-    </header>
 
-    <!-- PLANNER SECTION -->
-    <main id="section-planner" class="section active">
-      <div class="workspace">
-
-        <!-- LEFT PANEL: Input -->
-        <aside class="panel panel-left">
-          <div class="panel-header">
-            <h2>Load Configuration</h2>
-          </div>
-
-          <!-- Master Reference -->
-          <div class="field-group">
-            <label class="field-label">Master Load Reference</label>
-            <div class="master-ref-row">
-              <input type="text" id="masterRef" class="field-input" placeholder="e.g. MLD-2025-001" />
-              <button class="btn-ghost" onclick="generateMasterRef()">Auto</button>
-            </div>
-          </div>
-
-          <!-- Add Cargo Item -->
-          <div class="field-group">
-            <label class="field-label">Add Cargo Item</label>
-            <div class="cargo-form">
-              <div class="form-row">
-                <div class="form-col">
-                  <label class="sub-label">Shipment ID</label>
-                  <input type="text" id="ci-shipment" class="field-input sm" placeholder="e.g. SHP-001" />
-                </div>
-                <div class="form-col">
-                  <label class="sub-label">Description</label>
-                  <input type="text" id="ci-desc" class="field-input sm" placeholder="e.g. Electronics" />
-                </div>
-              </div>
-              <div class="form-row three">
-                <div class="form-col">
-                  <label class="sub-label">L (cm)</label>
-                  <input type="number" id="ci-l" class="field-input sm" placeholder="120" min="1" />
-                </div>
-                <div class="form-col">
-                  <label class="sub-label">W (cm)</label>
-                  <input type="number" id="ci-w" class="field-input sm" placeholder="80" min="1" />
-                </div>
-                <div class="form-col">
-                  <label class="sub-label">H (cm)</label>
-                  <input type="number" id="ci-h" class="field-input sm" placeholder="100" min="1" />
-                </div>
-              </div>
-              <div class="form-row three">
-                <div class="form-col">
-                  <label class="sub-label">Weight (kg)</label>
-                  <input type="number" id="ci-weight" class="field-input sm" placeholder="50" min="0.1" step="0.1"/>
-                </div>
-                <div class="form-col">
-                  <label class="sub-label">Qty</label>
-                  <input type="number" id="ci-qty" class="field-input sm" placeholder="1" min="1" value="1" />
-                </div>
-                <div class="form-col">
-                  <label class="sub-label">Max Load (kg)</label>
-                  <input type="number" id="ci-maxload" class="field-input sm" placeholder="200" min="0" />
-                </div>
-              </div>
-              <div class="form-row">
-                <div class="form-col">
-                  <label class="sub-label">Category</label>
-                  <select id="ci-category" class="field-input sm">
-                    <option value="box">Box</option>
-                    <option value="pallet">Pallet</option>
-                    <option value="crate">Crate</option>
-                    <option value="barrel">Barrel</option>
-                    <option value="custom">Custom</option>
-                  </select>
-                </div>
-                <div class="form-col">
-                  <label class="sub-label">Stack Priority</label>
-                  <select id="ci-stackpriority" class="field-input sm">
-                    <option value="3">3 – Strong Base</option>
-                    <option value="2" selected>2 – Medium</option>
-                    <option value="1">1 – Fragile</option>
-                    <option value="0">0 – Do Not Stack</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-row checks">
-                <label class="check-label">
-                  <input type="checkbox" id="ci-stackable" checked />
-                  <span>Stackable</span>
-                </label>
-                <label class="check-label">
-                  <input type="checkbox" id="ci-rotatable" checked />
-                  <span>Allow Rotation</span>
-                </label>
-              </div>
-              <button class="btn-primary full-width" onclick="addCargoItem()">+ Add Item</button>
-            </div>
-          </div>
-
-          <!-- CSV Upload -->
-          <div class="field-group">
-            <label class="field-label">Bulk Upload</label>
-            <label class="upload-area" for="csvUpload">
-              <span class="upload-icon">↑</span>
-              <span>Upload CSV</span>
-              <input type="file" id="csvUpload" accept=".csv" onchange="handleCSV(event)" style="display:none"/>
-            </label>
-            <a href="#" onclick="downloadCSVTemplate()" class="link-small">Download CSV template</a>
-          </div>
-
-          <!-- Calculate -->
-          <button class="btn-accent full-width mt" id="calcBtn" onclick="runCalculation()">
-            <span>Calculate Load Plan</span>
-            <span class="btn-icon">→</span>
-          </button>
-        </aside>
-
-        <!-- CENTER: Cargo List + 3D -->
-        <section class="panel panel-center">
-          <!-- Cargo items list -->
-          <div class="cargo-list-wrap" id="cargoListWrap">
-            <div class="panel-header-row">
-              <h3>Cargo Items <span class="badge" id="itemCount">0 items</span></h3>
-              <button class="btn-ghost-sm" onclick="clearAllItems()">Clear all</button>
-            </div>
-            <div id="cargoTable" class="cargo-table">
-              <div class="empty-state">
-                <div class="empty-icon">▦</div>
-                <p>No cargo items added yet.<br/>Start by adding items on the left.</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- 3D Viewer -->
-          <div class="viewer-wrap" id="viewerWrap" style="display:none">
-            <div class="viewer-header">
-              <div class="viewer-title-row">
-                <h3 id="viewerTitle">Load Plan</h3>
-                <div class="container-tabs" id="containerTabs"></div>
-              </div>
-              <div class="viewer-controls">
-                <button class="ctrl-btn" onclick="resetCamera()" title="Reset View">⌖</button>
-                <button class="ctrl-btn" onclick="toggleWireframe()" title="Wireframe">⬚</button>
-                <button class="ctrl-btn" onclick="exportPNG()" title="Export PNG">↓ PNG</button>
-              </div>
-            </div>
-            <div id="threeCanvas" class="three-canvas"></div>
-            <div class="viewer-legend" id="viewerLegend"></div>
-            <p class="viewer-hint">Drag to rotate · Scroll to zoom · Right-click to pan · Hover items for details</p>
-          </div>
-        </section>
-
-        <!-- RIGHT PANEL: Summary -->
-        <aside class="panel panel-right" id="summaryPanel">
-          <div class="panel-header">
-            <h2>Load Summary</h2>
-          </div>
-          <div id="summaryContent" class="summary-empty">
-            <div class="empty-icon">◫</div>
-            <p>Run a calculation to see the load summary here.</p>
-          </div>
-          <div id="summaryActions" style="display:none" class="summary-actions">
-            <button class="btn-primary full-width" onclick="exportPDF()">↓ Download PDF Report</button>
-            <button class="btn-ghost full-width mt-sm" onclick="exportPNG()">↓ Export 3D Snapshot</button>
-          </div>
-        </aside>
-
-      </div>
-    </main>
-
-    <!-- ABOUT SECTION -->
-    <main id="section-about" class="section" style="display:none">
-      <div class="about-wrap">
-        <h1>How AutoLoad 3D Works</h1>
-        <div class="about-grid">
-          <div class="about-card">
-            <div class="about-num">01</div>
-            <h3>Input Your Cargo</h3>
-            <p>Add items manually or upload a CSV. Each item carries its dimensions, weight, shipment reference, and stacking rules.</p>
-          </div>
-          <div class="about-card">
-            <div class="about-num">02</div>
-            <h3>Smart Container Selection</h3>
-            <p>The app automatically picks the smallest suitable container. No manual selection needed. If cargo overflows, it calculates how many containers are required.</p>
-          </div>
-          <div class="about-card">
-            <div class="about-num">03</div>
-            <h3>Realistic Stacking Logic</h3>
-            <p>Items are sorted by weight and stack priority. Heavy, strong items go first. Fragile items are never crushed. Rotation is only applied when allowed.</p>
-          </div>
-          <div class="about-card">
-            <div class="about-num">04</div>
-            <h3>3D Visualization</h3>
-            <p>Rotate, zoom, and inspect your load in real-time 3D. Each shipment is color-coded for instant visual distinction.</p>
-          </div>
-        </div>
-      </div>
-    </main>
-
-    <!-- Tooltip -->
-    <div id="tooltip" class="tooltip" style="display:none"></div>
+<!-- ── HEADER ── -->
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-mark">▦</span>
+      <span class="logo-text">AutoLoad<span class="logo-accent">3D</span></span>
+    </div>
+    <nav class="header-nav">
+      <button class="nav-btn active" onclick="showPage('planner')">Planner</button>
+      <button class="nav-btn" onclick="showPage('guided')">Guided Loading</button>
+      <button class="nav-btn" onclick="showPage('about')">How It Works</button>
+    </nav>
+    <div class="header-actions">
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+        <span class="theme-icon">◐</span>
+      </button>
+    </div>
   </div>
+</header>
 
-  <!-- PDF lib -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <!-- Three.js -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="app.js"></script>
+<!-- ══════════════════════════════════════════
+     PAGE: PLANNER
+══════════════════════════════════════════ -->
+<div id="page-planner" class="page active">
+  <div class="workspace">
+
+    <!-- LEFT PANEL -->
+    <aside class="panel panel-left">
+      <div class="panel-section">
+        <div class="section-label">Master Reference</div>
+        <div class="master-row">
+          <input id="masterRef" class="inp" type="text" placeholder="MLD-2025-001"/>
+          <button class="btn-ghost" onclick="genRef()">Auto</button>
+        </div>
+      </div>
+
+      <!-- EQUIPMENT TYPE -->
+      <div class="panel-section">
+        <div class="section-label">Equipment Type</div>
+        <div class="equip-tabs">
+          <button class="equip-tab active" onclick="setEquipType('air',this)">✈ Air ULD</button>
+          <button class="equip-tab" onclick="setEquipType('sea',this)">🚢 Sea</button>
+          <button class="equip-tab" onclick="setEquipType('truck',this)">🚛 Truck</button>
+          <button class="equip-tab" onclick="setEquipType('custom',this)">⚙ Custom</button>
+        </div>
+
+        <!-- Air ULD selector -->
+        <div id="equip-air" class="equip-panel active">
+          <select id="uld-select" class="inp" onchange="updateEquipPreview()">
+            <option value="LD1">LD-1 (AKE) — 156×153×163 cm</option>
+            <option value="LD3">LD-3 (AKH) — 201×153×163 cm</option>
+            <option value="LD7">LD-7 (AKE) — 317×224×163 cm</option>
+            <option value="LD11">LD-11 (AKE) — 307×244×163 cm</option>
+            <option value="PMC">PMC (P6P) — 317×244×163 cm</option>
+          </select>
+        </div>
+
+        <!-- Sea selector -->
+        <div id="equip-sea" class="equip-panel">
+          <select id="sea-select" class="inp" onchange="updateEquipPreview()">
+            <option value="20GP">20' General Purpose — 589×235×239 cm</option>
+            <option value="40GP">40' General Purpose — 1203×235×239 cm</option>
+            <option value="40HC">40' High Cube — 1203×235×269 cm</option>
+            <option value="45HC">45' High Cube — 1357×235×269 cm</option>
+          </select>
+        </div>
+
+        <!-- Truck selector -->
+        <div id="equip-truck" class="equip-panel">
+          <select id="truck-select" class="inp" onchange="updateEquipPreview()">
+            <option value="53FT">53' Trailer — 1603×250×274 cm</option>
+            <option value="48FT">48' Trailer — 1463×250×274 cm</option>
+            <option value="40FT">40' Trailer — 1220×250×274 cm</option>
+          </select>
+        </div>
+
+        <!-- Custom -->
+        <div id="equip-custom" class="equip-panel">
+          <div class="form-row three">
+            <div class="fc"><label class="sub-lbl">L (cm)</label><input id="custom-l" class="inp sm" type="number" placeholder="600"/></div>
+            <div class="fc"><label class="sub-lbl">W (cm)</label><input id="custom-w" class="inp sm" type="number" placeholder="240"/></div>
+            <div class="fc"><label class="sub-lbl">H (cm)</label><input id="custom-h" class="inp sm" type="number" placeholder="240"/></div>
+          </div>
+          <div class="form-row">
+            <div class="fc"><label class="sub-lbl">Max Payload (kg)</label><input id="custom-payload" class="inp sm" type="number" placeholder="20000"/></div>
+          </div>
+        </div>
+
+        <!-- Preview -->
+        <div id="equipPreview" class="equip-preview"></div>
+      </div>
+
+      <!-- CARGO ITEM FORM -->
+      <div class="panel-section">
+        <div class="section-label">Add Cargo Item</div>
+        <div class="cargo-form">
+          <div class="form-row">
+            <div class="fc"><label class="sub-lbl">Shipment ID</label><input id="ci-shp" class="inp sm" type="text" placeholder="SHP-001"/></div>
+            <div class="fc"><label class="sub-lbl">Description</label><input id="ci-desc" class="inp sm" type="text" placeholder="Electronics"/></div>
+          </div>
+          <div class="form-row three">
+            <div class="fc"><label class="sub-lbl">L (cm)</label><input id="ci-l" class="inp sm" type="number" placeholder="60" min="1"/></div>
+            <div class="fc"><label class="sub-lbl">W (cm)</label><input id="ci-w" class="inp sm" type="number" placeholder="40" min="1"/></div>
+            <div class="fc"><label class="sub-lbl">H (cm)</label><input id="ci-h" class="inp sm" type="number" placeholder="40" min="1"/></div>
+          </div>
+          <div class="form-row three">
+            <div class="fc"><label class="sub-lbl">Weight (kg)</label><input id="ci-wt" class="inp sm" type="number" placeholder="25" min="0.1" step="0.1"/></div>
+            <div class="fc"><label class="sub-lbl">Qty</label><input id="ci-qty" class="inp sm" type="number" placeholder="1" min="1" value="1"/></div>
+            <div class="fc"><label class="sub-lbl">Max Top (kg)</label><input id="ci-maxload" class="inp sm" type="number" placeholder="100"/></div>
+          </div>
+          <div class="form-row">
+            <div class="fc">
+              <label class="sub-lbl">Category</label>
+              <select id="ci-cat" class="inp sm">
+                <option value="box">Box</option>
+                <option value="pallet">Pallet</option>
+                <option value="crate">Crate</option>
+                <option value="barrel">Barrel</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div class="fc">
+              <label class="sub-lbl">Stack Priority</label>
+              <select id="ci-prio" class="inp sm">
+                <option value="3">3 – Strong Base</option>
+                <option value="2" selected>2 – Medium</option>
+                <option value="1">1 – Fragile</option>
+                <option value="0">0 – No Stack</option>
+              </select>
+            </div>
+          </div>
+          <div class="checks-row">
+            <label class="chk"><input type="checkbox" id="ci-stack" checked/><span>Stackable</span></label>
+            <label class="chk"><input type="checkbox" id="ci-rot" checked/><span>Rotatable</span></label>
+          </div>
+          <button class="btn-primary full" onclick="addItem()">+ Add Item</button>
+        </div>
+      </div>
+
+      <!-- CSV -->
+      <div class="panel-section">
+        <div class="section-label">Bulk Upload</div>
+        <label class="upload-zone" for="csvFile">
+          <span class="upload-icon">↑</span><span>Drop CSV or click</span>
+          <input type="file" id="csvFile" accept=".csv" onchange="loadCSV(event)" style="display:none"/>
+        </label>
+        <a href="#" class="link-xs" onclick="dlTemplate()">↓ Download CSV template</a>
+      </div>
+
+      <div class="panel-section">
+        <button class="btn-accent full" id="calcBtn" onclick="runAll()">
+          <span>Calculate Load Plan</span><span class="btn-arr">→</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- CENTER -->
+    <section class="panel-center">
+      <!-- Cargo list -->
+      <div class="cargo-list-area" id="cargoListArea">
+        <div class="area-header">
+          <span class="area-title">Cargo Items <span class="badge" id="itemBadge">0</span></span>
+          <button class="btn-ghost-xs" onclick="clearItems()">Clear all</button>
+        </div>
+        <div id="cargoTable" class="cargo-table">
+          <div class="empty-msg"><div class="empty-ico">▦</div><p>No items yet. Add cargo on the left.</p></div>
+        </div>
+      </div>
+
+      <!-- Algorithm comparison -->
+      <div id="algoCompare" class="algo-compare" style="display:none">
+        <div class="area-header">
+          <span class="area-title">Algorithm Comparison — Pick Best Result</span>
+        </div>
+        <div class="algo-cards" id="algoCards"></div>
+      </div>
+
+      <!-- 3D Viewer -->
+      <div id="viewerArea" class="viewer-area" style="display:none">
+        <div class="viewer-toolbar">
+          <div class="viewer-left">
+            <span class="area-title" id="viewerTitle">3D View</span>
+            <div id="ctrTabs" class="ctr-tabs"></div>
+          </div>
+          <div class="viewer-right">
+            <button class="tbtn" onclick="resetCam()" title="Reset">⌖</button>
+            <button class="tbtn" onclick="toggleWF()" title="Wireframe">⬚</button>
+            <button class="tbtn" onclick="toggleExplode()" title="Explode">⊞</button>
+            <button class="tbtn" onclick="doExportPNG()" title="PNG">↓PNG</button>
+          </div>
+        </div>
+        <div id="threeMount" class="three-mount"></div>
+        <div id="viewerLegend" class="viewer-legend"></div>
+        <div class="viewer-hint">Drag · Scroll zoom · Right-click pan · Hover for details</div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: Summary -->
+    <aside class="panel panel-right" id="summaryPanel">
+      <div class="panel-section no-border">
+        <div class="section-label">Load Summary</div>
+      </div>
+      <div id="summaryBody">
+        <div class="empty-msg" style="padding:40px 20px">
+          <div class="empty-ico">◫</div><p>Run a calculation to see results.</p>
+        </div>
+      </div>
+      <div id="summaryFooter" class="summary-footer" style="display:none">
+        <button class="btn-primary full" onclick="doExportPDF()">↓ PDF Report</button>
+        <button class="btn-ghost full mt-xs" onclick="doExportPNG()">↓ 3D Snapshot</button>
+        <button class="btn-ghost full mt-xs" onclick="showGuidedFromResult()">☰ Guided Loading</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PAGE: GUIDED LOADING
+══════════════════════════════════════════ -->
+<div id="page-guided" class="page" style="display:none">
+  <div class="guided-wrap">
+    <div class="guided-header">
+      <h1>Guided Loading Instructions</h1>
+      <div class="guided-actions">
+        <button class="btn-ghost" onclick="showPage('planner')">← Back to Planner</button>
+        <button class="btn-primary" onclick="printGuided()">Print / Save PDF</button>
+      </div>
+    </div>
+    <div id="guidedContent" class="guided-content">
+      <div class="empty-msg"><p>Run a load calculation first, then come back here.</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PAGE: ABOUT
+══════════════════════════════════════════ -->
+<div id="page-about" class="page" style="display:none">
+  <div class="about-wrap">
+    <h1>How AutoLoad 3D Works</h1>
+    <div class="about-grid">
+      <div class="about-card"><div class="about-n">01</div><h3>Input Cargo</h3><p>Add items manually or via CSV. Each item carries dimensions, weight, shipment reference, stackability, and rotation rules.</p></div>
+      <div class="about-card"><div class="about-n">02</div><h3>Three Algorithms</h3><p>LAFF, DBLF, and Layer Builder each solve the packing problem differently. The app runs all three and shows you a side-by-side comparison so you pick the best result.</p></div>
+      <div class="about-card"><div class="about-n">03</div><h3>Realistic Constraints</h3><p>Stacking priority, crush limits, category rules, weight distribution, and center-of-gravity checks are all enforced — not just volume optimization.</p></div>
+      <div class="about-card"><div class="about-n">04</div><h3>All Equipment Types</h3><p>Air ULDs with accurate contoured shapes, sea containers, trucks with axle weight awareness, and fully custom equipment definitions.</p></div>
+      <div class="about-card"><div class="about-n">05</div><h3>3D Visualization</h3><p>Interactive Three.js viewer with rotation, zoom, wireframe, explode mode, and hover tooltips per item. Color-coded by shipment.</p></div>
+      <div class="about-card"><div class="about-n">06</div><h3>Guided Loading</h3><p>Step-by-step printable instructions for warehouse staff. Each piece gets a sequence number, exact position, and rotation call-out.</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- Tooltip -->
+<div id="tooltip" class="tooltip" style="display:none"></div>
+
+<!-- Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="equipment.js"></script>
+<script src="algorithms.js"></script>
+<script src="viewer.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

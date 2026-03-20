@@ -1,1022 +1,609 @@
 /* =============================================
-   AutoLoad 3D Planner — Application Logic
+   app.js — Main application controller
    ============================================= */
 
 'use strict';
 
 // ─── STATE ───────────────────────────────────────
-const state = {
-  items: [],        // raw cargo input items
-  results: null,    // packed containers
+const AppState = {
+  items: [],
+  results: null,       // array of 3 algo results
+  chosenAlgo: null,    // chosen result object
   activeContainer: 0,
-  threeScene: null,
-  threeRenderer: null,
-  threeCamera: null,
-  threeControls: null,
-  wireframe: false,
-  meshes: [],
-  animFrame: null,
+  theme: 'dark',
 };
 
-// ─── CONTAINER DEFINITIONS (internal cm) ─────────
-const CONTAINERS = [
-  { id: '20GP',  name: "20' General Purpose",  L: 589, W: 235, H: 239, maxPayload: 21700 },
-  { id: '40GP',  name: "40' General Purpose",  L: 1203, W: 235, H: 239, maxPayload: 26500 },
-  { id: '40HC',  name: "40' High Cube",         L: 1203, W: 235, H: 269, maxPayload: 26470 },
-  { id: '45HC',  name: "45' High Cube",         L: 1357, W: 235, H: 269, maxPayload: 27600 },
-];
-
-// Floor load limit kg/m² (safety)
-const FLOOR_LOAD_KG_M2 = 3000;
-
-// ─── COLOR PALETTE FOR SHIPMENTS ─────────────────
-const SHIPMENT_COLORS = [
-  0x4fa8ff, 0x3ddc97, 0xf5c842, 0xff5f6d, 0xb48aff,
-  0xff9d5c, 0x5ce8e8, 0xff79c6, 0x8be9fd, 0x50fa7b,
-  0xffb86c, 0xff5555, 0xbd93f9, 0xf1fa8c, 0x6be5fd,
-];
-const shipmentColorMap = {};
-let colorIdx = 0;
-function getShipmentColor(shipmentId) {
-  if (!shipmentColorMap[shipmentId]) {
-    shipmentColorMap[shipmentId] = SHIPMENT_COLORS[colorIdx % SHIPMENT_COLORS.length];
-    colorIdx++;
-  }
-  return shipmentColorMap[shipmentId];
-}
-function hexToCSS(hex) {
-  return '#' + hex.toString(16).padStart(6, '0');
+// ─── THEME ───────────────────────────────────────
+function toggleTheme() {
+  AppState.theme = AppState.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', AppState.theme);
+  document.querySelector('.theme-icon').textContent = AppState.theme === 'dark' ? '◐' : '●';
 }
 
-// ─── UI UTILITIES ─────────────────────────────────
-function showSection(name) {
-  document.querySelectorAll('.section').forEach(s => { s.style.display = 'none'; s.classList.remove('active'); });
+// ─── NAVIGATION ──────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-  const el = document.getElementById('section-' + name);
-  if (el) { el.style.display = 'block'; el.classList.add('active'); }
-  const nb = document.getElementById('nav-' + name);
+  const pg = document.getElementById('page-' + name);
+  if (pg) pg.style.display = 'block';
+  const nb = [...document.querySelectorAll('.nav-btn')].find(b => b.textContent.toLowerCase().includes(name.replace('-',' ')));
   if (nb) nb.classList.add('active');
+
+  if (name === 'guided') renderGuidedPage();
 }
 
-function notify(msg, type = '') {
-  const n = document.createElement('div');
-  n.className = 'notif ' + type;
-  n.textContent = msg;
-  document.body.appendChild(n);
-  setTimeout(() => n.remove(), 3500);
-}
-
-function generateMasterRef() {
+// ─── MASTER REF ──────────────────────────────────
+function genRef() {
   const d = new Date();
-  const ref = `MLD-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${Math.floor(Math.random()*9000+1000)}`;
-  document.getElementById('masterRef').value = ref;
+  document.getElementById('masterRef').value =
+    `MLD-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${Math.floor(Math.random()*9000+1000)}`;
 }
 
-// ─── CARGO ITEM MANAGEMENT ────────────────────────
-function addCargoItem() {
-  const shipment = document.getElementById('ci-shipment').value.trim();
-  const desc     = document.getElementById('ci-desc').value.trim();
-  const l        = parseFloat(document.getElementById('ci-l').value);
-  const w        = parseFloat(document.getElementById('ci-w').value);
-  const h        = parseFloat(document.getElementById('ci-h').value);
-  const weight   = parseFloat(document.getElementById('ci-weight').value);
-  const qty      = parseInt(document.getElementById('ci-qty').value) || 1;
-  const maxload  = parseFloat(document.getElementById('ci-maxload').value) || 99999;
-  const category = document.getElementById('ci-category').value;
-  const stackPri = parseInt(document.getElementById('ci-stackpriority').value);
-  const stackable= document.getElementById('ci-stackable').checked;
-  const rotatable= document.getElementById('ci-rotatable').checked;
+// ─── CARGO MANAGEMENT ────────────────────────────
+function addItem() {
+  const shp     = document.getElementById('ci-shp').value.trim();
+  const desc    = document.getElementById('ci-desc').value.trim() || 'Cargo';
+  const l       = parseFloat(document.getElementById('ci-l').value);
+  const w       = parseFloat(document.getElementById('ci-w').value);
+  const h       = parseFloat(document.getElementById('ci-h').value);
+  const weight  = parseFloat(document.getElementById('ci-wt').value);
+  const qty     = parseInt(document.getElementById('ci-qty').value) || 1;
+  const maxload = parseFloat(document.getElementById('ci-maxload').value) || 99999;
+  const cat     = document.getElementById('ci-cat').value;
+  const prio    = parseInt(document.getElementById('ci-prio').value);
+  const stack   = document.getElementById('ci-stack').checked;
+  const rot     = document.getElementById('ci-rot').checked;
 
-  if (!shipment) { notify('Shipment ID is required.', 'error'); return; }
-  if (isNaN(l)||isNaN(w)||isNaN(h)||l<=0||w<=0||h<=0) { notify('Enter valid dimensions.', 'error'); return; }
-  if (isNaN(weight)||weight<=0) { notify('Enter valid weight.', 'error'); return; }
+  if (!shp)                    { toast('Shipment ID required.', 'error'); return; }
+  if (isNaN(l)||l<=0||isNaN(w)||w<=0||isNaN(h)||h<=0) { toast('Enter valid dimensions.', 'error'); return; }
+  if (isNaN(weight)||weight<=0){ toast('Enter valid weight.', 'error'); return; }
 
-  for (let q = 0; q < qty; q++) {
-    state.items.push({
-      id: Date.now() + '-' + Math.random().toString(36).slice(2),
-      shipment: shipment || 'DEFAULT',
-      desc: desc || 'Cargo',
-      l, w, h,
-      weight,
-      maxLoadOnTop: maxload,
-      category,
-      stackPriority: stackPri,
-      stackable,
-      rotatable,
+  for (let i = 0; i < qty; i++) {
+    AppState.items.push({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      shipment: shp, desc, l, w, h, weight,
+      maxLoadOnTop: maxload, category: cat,
+      stackPriority: prio, stackable: stack, rotatable: rot,
     });
   }
-
-  renderCargoList();
-  // Clear form
-  ['ci-shipment','ci-desc','ci-l','ci-w','ci-h','ci-weight','ci-maxload'].forEach(id => document.getElementById(id).value = '');
+  renderItemList();
+  ['ci-shp','ci-desc','ci-l','ci-w','ci-h','ci-wt','ci-maxload'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('ci-qty').value = '1';
-  notify(`Added ${qty} item(s) — Shipment: ${shipment}`, 'success');
+  toast(`Added ${qty} item(s) · ${shp}`, 'success');
 }
 
 function deleteItem(id) {
-  state.items = state.items.filter(i => i.id !== id);
-  renderCargoList();
+  AppState.items = AppState.items.filter(i => i.id !== id);
+  renderItemList();
 }
 
-function clearAllItems() {
-  if (state.items.length === 0) return;
-  state.items = [];
-  renderCargoList();
-  resetResults();
+function clearItems() {
+  AppState.items = [];
+  renderItemList();
+  resetResultsUI();
 }
 
-function renderCargoList() {
-  const el = document.getElementById('cargoTable');
-  const countEl = document.getElementById('itemCount');
-  countEl.textContent = `${state.items.length} item${state.items.length !== 1 ? 's' : ''}`;
-
-  if (state.items.length === 0) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">▦</div><p>No cargo items added yet.<br/>Start by adding items on the left.</p></div>`;
+function renderItemList() {
+  const el  = document.getElementById('cargoTable');
+  const bdg = document.getElementById('itemBadge');
+  bdg.textContent = AppState.items.length;
+  if (!AppState.items.length) {
+    el.innerHTML = `<div class="empty-msg"><div class="empty-ico">▦</div><p>No items yet. Add cargo on the left.</p></div>`;
     return;
   }
-
-  el.innerHTML = state.items.map(item => {
-    const color = hexToCSS(getShipmentColor(item.shipment));
-    const cbm = ((item.l * item.w * item.h) / 1000000).toFixed(3);
+  el.innerHTML = AppState.items.map(item => {
+    const col = Viewer.hexCSS(Viewer.getColor(item.shipment));
+    const cbm = ((item.l * item.w * item.h) / 1e6).toFixed(3);
     return `
       <div class="cargo-row">
-        <div class="cargo-row-info">
-          <div class="cargo-row-name">
-            <span class="color-dot" style="background:${color}"></span>
-            ${item.desc}
-          </div>
-          <div class="cargo-row-shipment">SHP: ${item.shipment}</div>
-          <div class="cargo-row-dims">${item.l}×${item.w}×${item.h} cm · ${item.weight} kg · ${cbm} CBM</div>
-          <div class="cargo-row-flags">
-            ${item.stackable ? '<span class="flag flag-stack">Stackable</span>' : '<span class="flag flag-nostack">No Stack</span>'}
-            ${item.rotatable ? '<span class="flag flag-rotate">Rotatable</span>' : ''}
-            <span class="flag flag-prio">P${item.stackPriority}</span>
-            <span class="flag flag-prio">${item.category}</span>
+        <div class="cri">
+          <div class="crn"><span class="cdot" style="background:${col}"></span>${item.desc}</div>
+          <div class="crs">SHP: ${item.shipment}</div>
+          <div class="crd">${item.l}×${item.w}×${item.h} cm · ${item.weight} kg · ${cbm} m³</div>
+          <div class="crf">
+            ${item.stackable?'<span class="fl fs">Stack</span>':'<span class="fl fn">No Stack</span>'}
+            ${item.rotatable?'<span class="fl fr">Rot</span>':''}
+            <span class="fl fp">P${item.stackPriority}</span>
+            <span class="fl fp">${item.category}</span>
           </div>
         </div>
-        <button class="cargo-row-delete" onclick="deleteItem('${item.id}')">✕</button>
-      </div>
-    `;
+        <button class="del-btn" onclick="deleteItem('${item.id}')">✕</button>
+      </div>`;
   }).join('');
 }
 
-// ─── CSV HANDLING ─────────────────────────────────
-function downloadCSVTemplate() {
-  const headers = 'shipment,description,length_cm,width_cm,height_cm,weight_kg,quantity,max_load_on_top_kg,category,stack_priority,stackable,rotatable';
-  const example = 'SHP-001,Electronics Box,60,40,40,25,10,100,box,2,true,true';
-  const blob = new Blob([headers + '\n' + example], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'autoload_template.csv'; a.click();
-  URL.revokeObjectURL(url);
+// ─── CSV ─────────────────────────────────────────
+function dlTemplate() {
+  const h = 'shipment,description,length_cm,width_cm,height_cm,weight_kg,quantity,max_load_on_top_kg,category,stack_priority,stackable,rotatable';
+  const r = 'SHP-001,Box of Electronics,60,40,40,25,10,100,box,2,true,true';
+  const b = new Blob([h+'\n'+r], {type:'text/csv'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'autoload_template.csv'; a.click();
 }
 
-function handleCSV(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const lines = e.target.result.split('\n').filter(l => l.trim());
-    if (lines.length < 2) { notify('CSV is empty.', 'error'); return; }
-    const rows = lines.slice(1);
-    let added = 0;
-    rows.forEach((row, idx) => {
-      const cols = row.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-      if (cols.length < 7) return;
-      const [shipment, desc, l, w, h, weight, qty, maxload, category, stackPri, stackable, rotatable] = cols;
-      const qtyN = parseInt(qty) || 1;
-      for (let q = 0; q < qtyN; q++) {
-        state.items.push({
-          id: Date.now() + '-' + Math.random().toString(36).slice(2),
-          shipment: shipment || 'DEFAULT',
-          desc: desc || 'Cargo',
-          l: parseFloat(l)||10, w: parseFloat(w)||10, h: parseFloat(h)||10,
-          weight: parseFloat(weight)||1,
-          maxLoadOnTop: parseFloat(maxload)||99999,
-          category: category || 'box',
-          stackPriority: parseInt(stackPri)||2,
-          stackable: stackable?.toLowerCase() !== 'false',
-          rotatable: rotatable?.toLowerCase() !== 'false',
-        });
-        added++;
+function loadCSV(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    const lines = ev.target.result.split('\n').filter(l=>l.trim()).slice(1);
+    let n = 0;
+    lines.forEach(row => {
+      const c = row.split(',').map(s=>s.trim().replace(/^"|"$/g,''));
+      if (c.length < 6) return;
+      const [shp,desc,l,w,h,wt,qty,maxload,cat,prio,stack,rot] = c;
+      const q = parseInt(qty)||1;
+      for (let i=0;i<q;i++) {
+        AppState.items.push({
+          id:`${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          shipment:shp||'DEFAULT', desc:desc||'Cargo',
+          l:parseFloat(l)||10, w:parseFloat(w)||10, h:parseFloat(h)||10,
+          weight:parseFloat(wt)||1, maxLoadOnTop:parseFloat(maxload)||99999,
+          category:cat||'box', stackPriority:parseInt(prio)||2,
+          stackable:stack?.toLowerCase()!=='false', rotatable:rot?.toLowerCase()!=='false',
+        }); n++;
       }
     });
-    renderCargoList();
-    notify(`Loaded ${added} items from CSV.`, 'success');
-    event.target.value = '';
+    renderItemList();
+    toast(`Loaded ${n} items from CSV.`, 'success');
+    e.target.value='';
   };
-  reader.readAsText(file);
+  r.readAsText(f);
 }
 
-// ─── BIN PACKING ENGINE ───────────────────────────
+// ─── MAIN CALCULATION ─────────────────────────────
+function runAll() {
+  if (!AppState.items.length) { toast('Add items first.', 'error'); return; }
 
-/**
- * Get all valid orientations for an item (respecting rotation flag)
- */
-function getOrientations(item) {
-  const { l, w, h, rotatable } = item;
-  if (!rotatable) return [{ l, w, h }];
-  // All 6 orientations
-  const orients = [
-    { l, w, h }, { l, w: h, h: w },
-    { l: w, w: l, h }, { l: w, w: h, h: l },
-    { l: h, w: l, h: w }, { l: h, w, h: l },
-  ];
-  // Deduplicate
-  const seen = new Set();
-  return orients.filter(o => {
-    const key = `${o.l},${o.w},${o.h}`;
-    if (seen.has(key)) return false;
-    seen.add(key); return true;
-  });
-}
+  const eq = getSelectedEquipment();
+  if (!eq) { toast('Select equipment first.', 'error'); return; }
 
-/**
- * Check if item can be placed on given surface items (stacking rules)
- */
-function canStackOn(topItem, bottomItems) {
-  if (!topItem.stackable && bottomItems.length > 0) return false;
-  for (const base of bottomItems) {
-    // Priority check: can't put heavier/stronger base types on weaker
-    if (topItem.stackPriority > base.stackPriority) return false;
-    // Crush limit
-    if (topItem.weight > base.maxLoadOnTop) return false;
-    // Category rules
-    if (!categoryAllowsStack(topItem.category, base.category)) return false;
-  }
-  return true;
-}
-
-function categoryAllowsStack(topCat, baseCat) {
-  const rules = {
-    pallet:  ['pallet'],
-    crate:   ['pallet', 'crate'],
-    box:     ['pallet', 'crate', 'box'],
-    barrel:  [],         // barrels can't be stacked
-    custom:  ['pallet', 'crate', 'box', 'custom'],
-  };
-  return (rules[topCat] || []).includes(baseCat);
-}
-
-/**
- * 3D Bin Packing — guillotine-based with realistic stacking
- * Returns array of { item, x, y, z, l, w, h } placements
- */
-function packContainer(items, container) {
-  // Sort: heaviest first, then largest footprint, then strongest base
-  const sorted = [...items].sort((a, b) => {
-    if (b.stackPriority !== a.stackPriority) return b.stackPriority - a.stackPriority;
-    if (b.weight !== a.weight) return b.weight - a.weight;
-    return (b.l * b.w) - (a.l * a.w);
-  });
-
-  const { L, W, H } = container;
-  const placed = []; // { item, x, y, z, il, iw, ih }
-  const unplaced = [];
-
-  // Space-filling using extreme points method
-  // Extreme points start at origin
-  let extremePoints = [{ x: 0, y: 0, z: 0 }];
-
-  for (const item of sorted) {
-    const orients = getOrientations(item);
-    let bestPlacement = null;
-    let bestScore = Infinity;
-
-    for (const orient of orients) {
-      const { l: il, w: iw, h: ih } = orient;
-      if (il > L || iw > W || ih > H) continue;
-
-      for (const ep of extremePoints) {
-        const { x, y, z } = ep;
-        if (x + il > L || z + iw > W) continue;
-
-        // Find actual y (floor level at this x,z position)
-        const supportY = getFloorLevel(x, y, z, il, iw, placed, H);
-        if (supportY < 0) continue;
-        if (supportY + ih > H) continue;
-
-        // Check weight on top of what's below
-        const itemsBelow = getItemsAt(x, supportY - 0.01, z, il, iw, placed);
-        if (!canStackOn(item, itemsBelow.map(p => p.item))) continue;
-
-        // Check floor load
-        const floorArea = (il * iw) / 10000; // cm² to m²
-        if (item.weight / floorArea > FLOOR_LOAD_KG_M2 && supportY === 0) { /* warn but allow */ }
-
-        // Score: prefer lower y (floor first), then lower x, z
-        const score = supportY * 1000 + x + z;
-        if (score < bestScore) {
-          bestScore = score;
-          bestPlacement = { x, y: supportY, z, il, iw, ih };
-        }
-      }
-    }
-
-    if (bestPlacement) {
-      placed.push({ item, ...bestPlacement });
-      // Update extreme points
-      extremePoints = updateExtremePoints(extremePoints, bestPlacement, L, W, H);
-    } else {
-      unplaced.push(item);
-    }
+  // Validate any item fits
+  const tooBig = AppState.items.filter(i => i.l > eq.L || i.w > eq.W || i.h > eq.H);
+  if (tooBig.length > 0) {
+    toast(`${tooBig.length} item(s) exceed equipment dimensions.`, 'error');
   }
 
-  return { placed, unplaced };
-}
-
-function getFloorLevel(x, y, z, il, iw, placed, H) {
-  // Find highest y where this item footprint rests on
-  let maxY = 0;
-  for (const p of placed) {
-    const px = p.x, py = p.y, pz = p.z;
-    const pl = p.il, pw = p.iw, ph = p.ih;
-    // Check overlap in x-z plane
-    if (x < px + pl && x + il > px && z < pz + pw && z + iw > pz) {
-      const topY = py + ph;
-      if (topY > maxY) maxY = topY;
-    }
-  }
-  return maxY;
-}
-
-function getItemsAt(x, y, z, il, iw, placed) {
-  return placed.filter(p => {
-    return (x < p.x + p.il && x + il > p.x &&
-            z < p.z + p.iw && z + iw > p.z &&
-            Math.abs((p.y + p.ih) - y) < 1);
-  });
-}
-
-function updateExtremePoints(eps, placement, L, W, H) {
-  const { x, y, z, il, iw, ih } = placement;
-  const newPoints = [
-    { x: x + il, y, z },
-    { x, y: y + ih, z },
-    { x, y, z: z + iw },
-  ];
-  const combined = [...eps, ...newPoints].filter(p =>
-    p.x < L && p.y < H && p.z < W
-  );
-  // Deduplicate
-  const seen = new Set();
-  return combined.filter(p => {
-    const key = `${Math.round(p.x)},${Math.round(p.y)},${Math.round(p.z)}`;
-    if (seen.has(key)) return false;
-    seen.add(key); return true;
-  });
-}
-
-/**
- * Main calculation: select best container, pack, overflow to additional
- */
-function calculateLoadPlan(items) {
-  if (items.length === 0) return null;
-
-  // Calculate total CBM and weight
-  const totalCBM = items.reduce((s, i) => s + (i.l * i.w * i.h) / 1e6, 0);
-  const totalWeight = items.reduce((s, i) => s + i.weight, 0);
-
-  // Select smallest container that fits total CBM (with 5% buffer) and weight
-  let selectedContainer = null;
-  for (const c of CONTAINERS) {
-    const containerCBM = (c.L * c.W * c.H) / 1e6;
-    if (containerCBM >= totalCBM * 0.95 && c.maxPayload >= totalWeight) {
-      selectedContainer = c;
-      break;
-    }
-  }
-  // Default to largest if still none
-  if (!selectedContainer) selectedContainer = CONTAINERS[CONTAINERS.length - 1];
-
-  // Pack items into containers
-  const containers = [];
-  let remaining = [...items];
-  let containerNum = 1;
-
-  while (remaining.length > 0) {
-    const result = packContainer(remaining, selectedContainer);
-    const containerCBM = (selectedContainer.L * selectedContainer.W * selectedContainer.H) / 1e6;
-    const loadedWeight = result.placed.reduce((s, p) => s + p.item.weight, 0);
-    const loadedCBM = result.placed.reduce((s, p) => s + (p.il * p.iw * p.ih) / 1e6, 0);
-
-    containers.push({
-      num: containerNum++,
-      containerDef: selectedContainer,
-      placed: result.placed,
-      unplacedInRound: result.unplaced,
-      loadedWeight,
-      loadedCBM,
-      containerCBM,
-      utilization: (loadedCBM / containerCBM * 100).toFixed(1),
-    });
-
-    if (result.unplaced.length === 0) break;
-    if (result.placed.length === 0) {
-      // Nothing was placed — items physically too large even for largest container
-      break;
-    }
-    remaining = result.unplaced;
-  }
-
-  return {
-    masterRef: document.getElementById('masterRef').value || 'AUTOREF-' + Date.now(),
-    totalCBM,
-    totalWeight,
-    containers,
-    selectedContainer,
-  };
-}
-
-// ─── RUN CALCULATION ──────────────────────────────
-function runCalculation() {
-  if (state.items.length === 0) { notify('Add cargo items first.', 'error'); return; }
-
-  const canvas = document.getElementById('threeCanvas');
-  const overlay = document.createElement('div');
-  overlay.className = 'loading-overlay';
-  overlay.innerHTML = '<div class="loading-spinner"></div><div class="loading-text">Computing load plan…</div>';
-  canvas.style.position = 'relative';
-  canvas.appendChild(overlay);
+  // Show loading
+  const btn = document.getElementById('calcBtn');
+  btn.disabled = true;
+  btn.querySelector('span').textContent = 'Calculating…';
 
   setTimeout(() => {
     try {
-      state.results = calculateLoadPlan(state.items);
-      state.activeContainer = 0;
-      renderSummary();
-      initThree();
-      renderContainer(0);
-      document.getElementById('viewerWrap').style.display = 'flex';
-      document.getElementById('summaryActions').style.display = 'block';
-      document.getElementById('summaryContent').classList.remove('summary-empty');
-    } catch(e) {
-      notify('Calculation error: ' + e.message, 'error');
-      console.error(e);
+      AppState.results = runAllAlgorithms(AppState.items, eq);
+      AppState.chosenAlgo = null;
+      AppState.activeContainer = 0;
+      renderAlgoComparison(AppState.results, eq);
+    } catch(err) {
+      toast('Calculation error: ' + err.message, 'error');
+      console.error(err);
     } finally {
-      overlay.remove();
+      btn.disabled = false;
+      btn.querySelector('span').textContent = 'Calculate Load Plan';
     }
-  }, 100);
+  }, 80);
 }
 
-function resetResults() {
-  state.results = null;
-  document.getElementById('viewerWrap').style.display = 'none';
-  document.getElementById('summaryContent').innerHTML = `<div class="summary-empty"><div class="empty-icon">◫</div><p>Run a calculation to see the load summary here.</p></div>`;
-  document.getElementById('summaryActions').style.display = 'none';
-  if (state.animFrame) cancelAnimationFrame(state.animFrame);
-  if (state.threeRenderer) {
-    state.threeRenderer.dispose();
-    state.threeRenderer = null;
-  }
+// ─── ALGORITHM COMPARISON ────────────────────────
+function renderAlgoComparison(results, eq) {
+  const wrap = document.getElementById('algoCompare');
+  const cards = document.getElementById('algoCards');
+  wrap.style.display = 'block';
+  document.getElementById('viewerArea').style.display = 'none';
+  resetSummaryUI();
+
+  const algoDescs = {
+    'LAFF':          'Sorts by base area, finds first fitting position at each candidate point. Fast and generally efficient.',
+    'DBLF':          'Depth-first scanning from back-left, builds a height map. Excellent for uniform cargo.',
+    'Layer Builder': 'Groups cargo into horizontal layers by height. Best for mixed-size cargo with clear height bands.',
+  };
+
+  cards.innerHTML = results.map((r, idx) => {
+    const c1 = r.containers[0];
+    const util = c1 ? c1.utilization : 0;
+    const utilNum = parseFloat(util);
+    const utilColor = utilNum > 85 ? 'green' : utilNum > 60 ? 'yellow' : 'blue';
+    const wm = c1?.weightMetrics;
+    const isBest = results.reduce((best, rr, ii) => {
+      return parseFloat(rr.containers[0]?.utilization||0) > parseFloat(results[best].containers[0]?.utilization||0) ? ii : best;
+    }, 0) === idx;
+
+    return `
+      <div class="algo-card ${isBest?'best':''}">
+        ${isBest?'<div class="best-badge">★ Best</div>':''}
+        <div class="algo-name">${r.algorithm}</div>
+        <div class="algo-desc">${algoDescs[r.algorithm]||''}</div>
+        <div class="algo-metrics">
+          <div class="am"><span class="amv ${utilColor}">${util}%</span><span class="aml">Utilization</span></div>
+          <div class="am"><span class="amv">${r.totalContainers}</span><span class="aml">Containers</span></div>
+          <div class="am"><span class="amv">${c1?c1.placed.length:0}</span><span class="aml">Items Loaded</span></div>
+          <div class="am"><span class="amv">${c1?c1.loadedWeight.toFixed(0):0} kg</span><span class="aml">Weight</span></div>
+        </div>
+        ${wm ? `
+          <div class="cog-row">
+            <span class="cog-label">Center of Gravity</span>
+            <span class="cog-val ${wm.balanced?'ok':'warn'}">${wm.balanced?'✓ Balanced':'⚠ Review'}</span>
+          </div>` : ''}
+        <button class="btn-primary full mt-xs" onclick="chooseAlgorithm(${idx})">
+          Use ${r.algorithm}
+        </button>
+      </div>`;
+  }).join('');
 }
 
-// ─── SUMMARY RENDERING ────────────────────────────
+function chooseAlgorithm(idx) {
+  AppState.chosenAlgo = AppState.results[idx];
+  AppState.activeContainer = 0;
+  document.getElementById('algoCompare').style.display = 'none';
+  document.getElementById('viewerArea').style.display = 'flex';
+
+  // Init viewer
+  const mountEl = document.getElementById('threeMount');
+  Viewer.init(mountEl);
+
+  renderContainerTabs();
+  renderViewerContainer(0);
+  renderSummary();
+  document.getElementById('summaryFooter').style.display = 'block';
+}
+
+function renderContainerTabs() {
+  const r = AppState.chosenAlgo;
+  const tabs = document.getElementById('ctrTabs');
+  tabs.innerHTML = r.containers.map((c, i) =>
+    `<button class="ctab ${i===AppState.activeContainer?'active':''}" onclick="switchCtr(${i})">CTR ${c.num}</button>`
+  ).join('');
+}
+
+function switchCtr(idx) {
+  AppState.activeContainer = idx;
+  document.querySelectorAll('.ctab').forEach((b,i) => b.classList.toggle('active', i===idx));
+  renderViewerContainer(idx);
+}
+
+function renderViewerContainer(idx) {
+  const r = AppState.chosenAlgo;
+  const c = r.containers[idx];
+  document.getElementById('viewerTitle').textContent =
+    `3D View — ${r.algorithm} · Container ${c.num} of ${r.containers.length}`;
+  Viewer.renderContainer(c, c.eq);
+}
+
+// ─── SUMMARY ─────────────────────────────────────
 function renderSummary() {
-  const r = state.results;
+  const r = AppState.chosenAlgo;
   if (!r) return;
+  const eq = r.containers[0]?.eq;
+  const masterRef = document.getElementById('masterRef').value || 'AUTO';
+  const totalW = r.containers.reduce((s,c) => s+c.loadedWeight, 0);
+  const totalCBM = r.containers.reduce((s,c) => s+c.loadedCBM, 0);
 
-  let html = `<div class="summary-content">`;
-  html += `<div class="summary-master">◈ MASTER: ${r.masterRef}</div>`;
+  let html = `<div class="summary-body">`;
+  html += `<div class="sum-master">◈ ${masterRef}</div>`;
+  html += `<div class="sum-algo-tag">Algorithm: <strong>${r.algorithm}</strong></div>`;
 
-  r.containers.forEach((c, idx) => {
-    const utilNum = parseFloat(c.utilization);
-    const utilColor = utilNum > 85 ? '#3ddc97' : utilNum > 50 ? '#f5c842' : '#4fa8ff';
-
-    // Group by shipment
-    const shipmentMap = {};
+  r.containers.forEach(c => {
+    const util = parseFloat(c.utilization);
+    const uColor = util>85?'var(--green)':util>55?'var(--accent)':'var(--blue)';
+    const shipMap = {};
     c.placed.forEach(p => {
-      const sid = p.item.shipment;
-      if (!shipmentMap[sid]) shipmentMap[sid] = { count: 0, weight: 0, cbm: 0 };
-      shipmentMap[sid].count++;
-      shipmentMap[sid].weight += p.item.weight;
-      shipmentMap[sid].cbm += (p.il * p.iw * p.ih) / 1e6;
+      const s = p.item.shipment;
+      if (!shipMap[s]) shipMap[s]={count:0,weight:0,cbm:0};
+      shipMap[s].count++; shipMap[s].weight+=p.item.weight;
+      shipMap[s].cbm+=(p.il*p.iw*p.ih)/1e6;
     });
 
     html += `
-      <div class="summary-container-block">
-        <div class="summary-container-title">
-          Container ${c.num}
-          <span class="summary-container-type">${c.containerDef.name}</span>
+      <div class="sum-block">
+        <div class="sum-ctr-title">Container ${c.num} <span class="sum-eq">${c.eq.name}</span></div>
+        <div class="metric-g">
+          <div class="met"><div class="mv">${c.loadedWeight.toFixed(0)}<span class="mu">kg</span></div><div class="ml">Weight</div></div>
+          <div class="met"><div class="mv">${c.loadedCBM.toFixed(2)}<span class="mu">m³</span></div><div class="ml">CBM</div></div>
+          <div class="met"><div class="mv">${c.placed.length}</div><div class="ml">Items</div></div>
+          <div class="met"><div class="mv" style="color:${uColor}">${c.utilization}<span class="mu">%</span></div><div class="ml">Utilization</div></div>
         </div>
-        <div class="metric-grid">
-          <div class="metric">
-            <div class="metric-value">${c.loadedWeight.toFixed(0)} kg</div>
-            <div class="metric-label">Total Weight</div>
-          </div>
-          <div class="metric">
-            <div class="metric-value">${c.loadedCBM.toFixed(2)} m³</div>
-            <div class="metric-label">Total CBM</div>
-          </div>
-          <div class="metric">
-            <div class="metric-value">${c.placed.length}</div>
-            <div class="metric-label">Items Loaded</div>
-          </div>
-          <div class="metric">
-            <div class="metric-value" style="color:${utilColor}">${c.utilization}%</div>
-            <div class="metric-label">Utilization</div>
-          </div>
-        </div>
-        <div class="util-bar">
-          <div class="util-fill" style="width:${Math.min(utilNum,100)}%;background:${utilColor}"></div>
-        </div>
-        <div class="shipment-list">
-          ${Object.entries(shipmentMap).map(([sid, data]) => {
-            const color = hexToCSS(getShipmentColor(sid));
-            return `<div class="shipment-row">
-              <span class="shipment-id"><span class="color-dot" style="background:${color}"></span>${sid}</span>
-              <span class="shipment-stats">${data.count} pcs · ${data.weight.toFixed(0)}kg · ${data.cbm.toFixed(2)}m³</span>
+        <div class="util-bar"><div class="util-fill" style="width:${Math.min(util,100)}%;background:${uColor}"></div></div>
+        ${c.weightMetrics ? `
+          <div class="wm-row">
+            <span class="wm-label">COG Balance</span>
+            <span class="wm-val ${c.weightMetrics.balanced?'ok':'warn'}">${c.weightMetrics.balanced?'✓ OK':'⚠ Review'}</span>
+          </div>` : ''}
+        ${c.axleLoads ? renderAxleLoads(c.axleLoads) : ''}
+        <div class="shp-list">
+          ${Object.entries(shipMap).map(([sid,d]) => {
+            const col = Viewer.hexCSS(Viewer.getColor(sid));
+            return `<div class="shp-row">
+              <span class="shp-id"><span class="cdot" style="background:${col}"></span>${sid}</span>
+              <span class="shp-stats">${d.count}pcs · ${d.weight.toFixed(0)}kg · ${d.cbm.toFixed(2)}m³</span>
             </div>`;
           }).join('')}
         </div>
-        ${c.loadedWeight > c.containerDef.maxPayload * 0.95 ?
-          `<div class="warning-tag">⚠ Near weight limit: ${c.loadedWeight.toFixed(0)}kg / ${c.containerDef.maxPayload}kg</div>` : ''}
-      </div>
-    `;
+        ${c.loadedWeight > c.eq.maxPayload * 0.95 ?
+          `<div class="warn-tag">⚠ Near weight limit: ${c.loadedWeight.toFixed(0)}/${c.eq.maxPayload} kg</div>` : ''}
+      </div>`;
   });
 
-  // Grand totals
   html += `
-    <div class="summary-totals">
-      <div class="summary-totals-title">Grand Total</div>
-      <div class="metric-grid">
-        <div class="metric">
-          <div class="metric-value">${r.totalWeight.toFixed(0)} kg</div>
-          <div class="metric-label">Total Weight</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">${r.totalCBM.toFixed(2)} m³</div>
-          <div class="metric-label">Total CBM</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">${r.containers.length}</div>
-          <div class="metric-label">Containers</div>
-        </div>
-        <div class="metric">
-          <div class="metric-value">${r.selectedContainer.id}</div>
-          <div class="metric-label">Equip. Type</div>
-        </div>
+    <div class="sum-totals">
+      <div class="sum-tot-title">Grand Total</div>
+      <div class="metric-g">
+        <div class="met"><div class="mv">${totalW.toFixed(0)}<span class="mu">kg</span></div><div class="ml">Weight</div></div>
+        <div class="met"><div class="mv">${totalCBM.toFixed(2)}<span class="mu">m³</span></div><div class="ml">CBM</div></div>
+        <div class="met"><div class="mv">${r.totalContainers}</div><div class="ml">Containers</div></div>
+        <div class="met"><div class="mv">${r.avgUtilization}<span class="mu">%</span></div><div class="ml">Avg Util</div></div>
       </div>
     </div>
   </div>`;
 
-  document.getElementById('summaryContent').innerHTML = html;
-
-  // Container tabs
-  const tabs = document.getElementById('containerTabs');
-  tabs.innerHTML = r.containers.map((c, i) => `
-    <button class="tab-btn ${i === state.activeContainer ? 'active' : ''}" onclick="switchContainer(${i})">
-      CTR ${c.num}
-    </button>
-  `).join('');
+  document.getElementById('summaryBody').innerHTML = html;
 }
 
-function switchContainer(idx) {
-  state.activeContainer = idx;
-  document.querySelectorAll('.tab-btn').forEach((b, i) => {
-    b.classList.toggle('active', i === idx);
-  });
-  renderContainer(idx);
+function renderAxleLoads(axleLoads) {
+  return `<div class="axle-block">
+    <div class="axle-title">Axle Loads</div>
+    ${axleLoads.map(a => {
+      const pct = (a.load / a.maxLoad * 100).toFixed(0);
+      const over = a.load > a.maxLoad;
+      return `<div class="axle-row">
+        <span class="axle-name">${a.name}</span>
+        <div class="axle-bar-wrap">
+          <div class="axle-bar" style="width:${Math.min(parseFloat(pct),100)}%;background:${over?'var(--red)':'var(--green)'}"></div>
+        </div>
+        <span class="axle-val ${over?'over':''}">${a.load.toFixed(0)}/${a.maxLoad} kg</span>
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 
-// ─── THREE.JS VISUALIZATION ───────────────────────
-function initThree() {
-  const canvasEl = document.getElementById('threeCanvas');
-  canvasEl.innerHTML = '';
+function resetSummaryUI() {
+  document.getElementById('summaryBody').innerHTML = `
+    <div class="empty-msg" style="padding:40px 20px">
+      <div class="empty-ico">◫</div><p>Choose an algorithm result to view summary.</p>
+    </div>`;
+  document.getElementById('summaryFooter').style.display = 'none';
+}
 
-  if (state.animFrame) cancelAnimationFrame(state.animFrame);
-  if (state.threeRenderer) state.threeRenderer.dispose();
+function resetResultsUI() {
+  document.getElementById('algoCompare').style.display = 'none';
+  document.getElementById('viewerArea').style.display = 'none';
+  resetSummaryUI();
+}
 
-  const W = canvasEl.clientWidth || 800;
-  const H = canvasEl.clientHeight || 500;
+// ─── GUIDED LOADING ───────────────────────────────
+function showGuidedFromResult() {
+  if (!AppState.chosenAlgo) { toast('No result selected.', 'error'); return; }
+  showPage('guided');
+}
 
-  // Scene
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x13161c);
-
-  // Camera
-  const camera = new THREE.PerspectiveCamera(45, W / H, 1, 50000);
-  camera.position.set(1200, 900, 1200);
-  camera.lookAt(0, 0, 0);
-
-  // Renderer
-  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-  renderer.setSize(W, H);
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.shadowMap.enabled = true;
-  canvasEl.appendChild(renderer.domElement);
-
-  // Lights
-  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-  dirLight.position.set(1000, 2000, 1000);
-  dirLight.castShadow = true;
-  scene.add(dirLight);
-  const fillLight = new THREE.DirectionalLight(0x4080ff, 0.3);
-  fillLight.position.set(-1000, 500, -500);
-  scene.add(fillLight);
-
-  // Grid
-  const grid = new THREE.GridHelper(6000, 30, 0x242835, 0x1a1e27);
-  grid.position.y = -5;
-  scene.add(grid);
-
-  // Orbit controls (manual)
-  setupOrbitControls(camera, renderer.domElement);
-
-  state.threeScene = scene;
-  state.threeCamera = camera;
-  state.threeRenderer = renderer;
-  state.meshes = [];
-
-  // Animate
-  function animate() {
-    state.animFrame = requestAnimationFrame(animate);
-    renderer.render(scene, camera);
+function renderGuidedPage() {
+  const r = AppState.chosenAlgo;
+  const el = document.getElementById('guidedContent');
+  if (!r) {
+    el.innerHTML = `<div class="empty-msg"><p>Run a load calculation and choose an algorithm first.</p></div>`;
+    return;
   }
-  animate();
 
-  // Resize observer
-  const ro = new ResizeObserver(() => {
-    const w = canvasEl.clientWidth;
-    const h = canvasEl.clientHeight;
-    if (w > 0 && h > 0) {
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    }
-  });
-  ro.observe(canvasEl);
-}
+  const masterRef = document.getElementById('masterRef').value || 'AUTO';
+  let html = `
+    <div class="guided-meta">
+      <div class="gm-item"><span class="gm-lbl">Master Ref</span><span class="gm-val">${masterRef}</span></div>
+      <div class="gm-item"><span class="gm-lbl">Algorithm</span><span class="gm-val">${r.algorithm}</span></div>
+      <div class="gm-item"><span class="gm-lbl">Containers</span><span class="gm-val">${r.totalContainers}</span></div>
+      <div class="gm-item"><span class="gm-lbl">Date</span><span class="gm-val">${new Date().toLocaleDateString()}</span></div>
+    </div>`;
 
-function renderContainer(idx) {
-  const r = state.results;
-  if (!r) return;
+  r.containers.forEach(c => {
+    const eq = c.eq;
+    const totalW = c.placed.reduce((s,p) => s+p.item.weight, 0);
+    const totalCBM = c.placed.reduce((s,p) => s+(p.il*p.iw*p.ih)/1e6, 0);
 
-  const scene = state.threeScene;
-  // Remove old meshes
-  state.meshes.forEach(m => scene.remove(m));
-  state.meshes = [];
-
-  const c = r.containers[idx];
-  const { L, W, H } = c.containerDef;
-
-  // Center offset
-  const ox = -L / 2, oy = 0, oz = -W / 2;
-
-  // Container shell (wireframe box)
-  const cGeo = new THREE.BoxGeometry(L, H, W);
-  const cMat = new THREE.MeshBasicMaterial({ color: 0x3a4060, wireframe: true, transparent: true, opacity: 0.4 });
-  const cMesh = new THREE.Mesh(cGeo, cMat);
-  cMesh.position.set(ox + L/2, oy + H/2, oz + W/2);
-  scene.add(cMesh);
-  state.meshes.push(cMesh);
-
-  // Container floor
-  const floorGeo = new THREE.PlaneGeometry(L, W);
-  const floorMat = new THREE.MeshStandardMaterial({ color: 0x1a1e27, transparent: true, opacity: 0.6 });
-  const floor = new THREE.Mesh(floorGeo, floorMat);
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.set(ox + L/2, 0.5, oz + W/2);
-  scene.add(floor);
-  state.meshes.push(floor);
-
-  // Place items
-  c.placed.forEach(p => {
-    const color = getShipmentColor(p.item.shipment);
-    const geo = new THREE.BoxGeometry(p.il - 2, p.ih - 2, p.iw - 2);
-    const mat = new THREE.MeshStandardMaterial({
-      color,
-      transparent: true,
-      opacity: state.wireframe ? 0 : 0.82,
-      wireframe: state.wireframe,
-      roughness: 0.7,
-      metalness: 0.1,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(
-      ox + p.x + p.il / 2,
-      oy + p.y + p.ih / 2,
-      oz + p.z + p.iw / 2
-    );
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.userData = { item: p.item, placement: p };
-
-    // Edge outline
-    const edgesGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(p.il - 1, p.ih - 1, p.iw - 1));
-    const edgesMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.15 });
-    const edges = new THREE.LineSegments(edgesGeo, edgesMat);
-    mesh.add(edges);
-
-    scene.add(mesh);
-    state.meshes.push(mesh);
+    html += `
+      <div class="guided-container">
+        <div class="gc-header">
+          <div class="gc-title">Container ${c.num} — ${eq.name}</div>
+          <div class="gc-stats">${c.placed.length} items · ${totalW.toFixed(0)} kg · ${totalCBM.toFixed(2)} m³ · ${c.utilization}% utilized</div>
+        </div>
+        <div class="loading-sequence">
+          <table class="seq-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Shipment</th>
+                <th>Description</th>
+                <th>Dimensions (cm)</th>
+                <th>Weight (kg)</th>
+                <th>Position (x,y,z)</th>
+                <th>Rotation</th>
+                <th>Stack</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${c.placed.map(p => {
+                const rotated = (p.il !== p.item.l || p.iw !== p.item.w || p.ih !== p.item.h);
+                const col = Viewer.hexCSS(Viewer.getColor(p.item.shipment));
+                return `
+                  <tr>
+                    <td class="seq-num">${p.seq}</td>
+                    <td><span class="shp-chip" style="border-color:${col};color:${col}">${p.item.shipment}</span></td>
+                    <td>${p.item.desc}</td>
+                    <td class="mono">${p.il}×${p.iw}×${p.ih}</td>
+                    <td class="mono">${p.item.weight}</td>
+                    <td class="mono">${p.x.toFixed(0)}, ${p.y.toFixed(0)}, ${p.z.toFixed(0)}</td>
+                    <td class="mono">${rotated?'<span class="rot-yes">Rotated</span>':'Standard'}</td>
+                    <td>${p.item.stackable?'✓':'-'}</td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        ${c.weightMetrics ? `
+          <div class="gc-cog">
+            ◎ Center of Gravity: X=${c.weightMetrics.cogX.toFixed(0)}cm · Y=${c.weightMetrics.cogY.toFixed(0)}cm · Z=${c.weightMetrics.cogZ.toFixed(0)}cm
+            <span class="${c.weightMetrics.balanced?'ok-tag':'warn-tag2'}">${c.weightMetrics.balanced?'Balanced':'Review distribution'}</span>
+          </div>` : ''}
+        ${c.axleLoads ? `
+          <div class="gc-axle">
+            ${c.axleLoads.map(a =>
+              `<span class="${a.load>a.maxLoad?'axle-over':'axle-ok'}">${a.name}: ${a.load.toFixed(0)}/${a.maxLoad} kg</span>`
+            ).join(' · ')}
+          </div>` : ''}
+      </div>`;
   });
 
-  // Camera reset for this container
-  const cx = 0, cy = H * 0.6, cz = Math.max(L, W) * 1.8;
-  state.threeCamera.position.set(cx + cz * 0.6, cy, cz * 0.9);
-  state.threeCamera.lookAt(0, H / 2, 0);
-
-  // Legend
-  renderLegend(c);
-
-  // Tooltip on hover
-  setupTooltip(r.containers[idx]);
+  el.innerHTML = html;
 }
 
-function renderLegend(c) {
-  const legend = document.getElementById('viewerLegend');
-  const shipments = [...new Set(c.placed.map(p => p.item.shipment))];
-  legend.innerHTML = shipments.map(sid => {
-    const color = hexToCSS(getShipmentColor(sid));
-    return `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div>${sid}</div>`;
-  }).join('');
+function printGuided() {
+  window.print();
 }
 
-// ─── ORBIT CONTROLS (manual) ─────────────────────
-function setupOrbitControls(camera, domEl) {
-  let isDragging = false, isRightDrag = false;
-  let prevMouse = { x: 0, y: 0 };
-  let spherical = { theta: Math.PI / 4, phi: Math.PI / 3, r: 2200 };
-  let target = new THREE.Vector3(0, 200, 0);
-
-  function updateCamera() {
-    camera.position.set(
-      target.x + spherical.r * Math.sin(spherical.phi) * Math.sin(spherical.theta),
-      target.y + spherical.r * Math.cos(spherical.phi),
-      target.z + spherical.r * Math.sin(spherical.phi) * Math.cos(spherical.theta)
-    );
-    camera.lookAt(target);
-  }
-  updateCamera();
-
-  domEl.addEventListener('mousedown', e => {
-    isDragging = true;
-    isRightDrag = e.button === 2;
-    prevMouse = { x: e.clientX, y: e.clientY };
-    e.preventDefault();
-  });
-  domEl.addEventListener('contextmenu', e => e.preventDefault());
-
-  window.addEventListener('mousemove', e => {
-    if (!isDragging) return;
-    const dx = e.clientX - prevMouse.x;
-    const dy = e.clientY - prevMouse.y;
-    prevMouse = { x: e.clientX, y: e.clientY };
-    if (isRightDrag) {
-      target.x -= dx * 1.2;
-      target.y += dy * 1.2;
-    } else {
-      spherical.theta -= dx * 0.005;
-      spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + dy * 0.005));
-    }
-    updateCamera();
-  });
-  window.addEventListener('mouseup', () => isDragging = false);
-  domEl.addEventListener('wheel', e => {
-    spherical.r = Math.max(200, Math.min(8000, spherical.r + e.deltaY * 1.5));
-    updateCamera();
-    e.preventDefault();
-  }, { passive: false });
-
-  // Touch
-  let lastTouch = null;
-  domEl.addEventListener('touchstart', e => {
-    if (e.touches.length === 1) lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  });
-  domEl.addEventListener('touchmove', e => {
-    if (!lastTouch) return;
-    const dx = e.touches[0].clientX - lastTouch.x;
-    const dy = e.touches[0].clientY - lastTouch.y;
-    spherical.theta -= dx * 0.005;
-    spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi + dy * 0.005));
-    lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    updateCamera();
-    e.preventDefault();
-  }, { passive: false });
-
-  // Store for reset
-  domEl._resetCamera = () => {
-    spherical = { theta: Math.PI / 4, phi: Math.PI / 3, r: 2200 };
-    target.set(0, 200, 0);
-    updateCamera();
-  };
+// ─── EXPORTS ─────────────────────────────────────
+function doExportPNG() {
+  if (!AppState.chosenAlgo) { toast('Run calculation first.', 'error'); return; }
+  const ref = document.getElementById('masterRef').value || 'plan';
+  Viewer.exportPNG(`AutoLoad3D_${ref}_CTR${AppState.activeContainer+1}.png`);
+  toast('3D snapshot exported.', 'success');
 }
 
-function resetCamera() {
-  const canvas = document.getElementById('threeCanvas');
-  const domEl = canvas.querySelector('canvas');
-  if (domEl && domEl._resetCamera) domEl._resetCamera();
-}
-
-function toggleWireframe() {
-  state.wireframe = !state.wireframe;
-  state.meshes.forEach(m => {
-    if (m.material && m.userData.item) {
-      m.material.wireframe = state.wireframe;
-      m.material.opacity = state.wireframe ? 1 : 0.82;
-    }
-  });
-}
-
-// ─── TOOLTIP HANDLING ─────────────────────────────
-function setupTooltip(container) {
-  const canvas = document.getElementById('threeCanvas');
-  const tooltip = document.getElementById('tooltip');
-  const raycaster = new THREE.Raycaster();
-
-  canvas.addEventListener('mousemove', e => {
-    const rect = canvas.getBoundingClientRect();
-    const mouse = new THREE.Vector2(
-      ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      -((e.clientY - rect.top) / rect.height) * 2 + 1
-    );
-    raycaster.setFromCamera(mouse, state.threeCamera);
-    const hits = raycaster.intersectObjects(state.meshes.filter(m => m.userData.item));
-    if (hits.length > 0) {
-      const { item, placement } = hits[0].object.userData;
-      const cbm = ((placement.il * placement.iw * placement.ih) / 1e6).toFixed(3);
-      tooltip.innerHTML = `
-        <strong>${item.desc}</strong><br>
-        Shipment: ${item.shipment}<br>
-        ${item.l}×${item.w}×${item.h} cm · ${item.weight} kg<br>
-        CBM: ${cbm} m³<br>
-        Category: ${item.category} · P${item.stackPriority}
-      `;
-      tooltip.style.display = 'block';
-      tooltip.style.left = (e.clientX + 14) + 'px';
-      tooltip.style.top  = (e.clientY - 10) + 'px';
-    } else {
-      tooltip.style.display = 'none';
-    }
-  });
-  canvas.addEventListener('mouseleave', () => tooltip.style.display = 'none');
-}
-
-// ─── EXPORTS ──────────────────────────────────────
-function exportPNG() {
-  if (!state.threeRenderer) { notify('Run a calculation first.', 'error'); return; }
-  state.threeRenderer.render(state.threeScene, state.threeCamera);
-  const dataURL = state.threeRenderer.domElement.toDataURL('image/png');
-  const a = document.createElement('a');
-  a.href = dataURL;
-  a.download = `AutoLoad3D_${state.results?.masterRef || 'plan'}.png`;
-  a.click();
-  notify('3D snapshot exported.', 'success');
-}
-
-function exportPDF() {
-  if (!state.results) { notify('Run a calculation first.', 'error'); return; }
+function doExportPDF() {
+  if (!AppState.chosenAlgo) { toast('Run calculation first.', 'error'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const r = AppState.chosenAlgo;
+  const masterRef = document.getElementById('masterRef').value || 'AUTO';
+  const M = 18, PW = 210;
+  let y = M;
 
-  const r = state.results;
-  const pageW = 210, margin = 18;
-  let y = margin;
-
-  // Header
-  doc.setFillColor(13, 15, 18);
-  doc.rect(0, 0, pageW, 40, 'F');
-  doc.setFont('helvetica', 'bold');
+  // Header bar
+  doc.setFillColor(13,15,18);
+  doc.rect(0,0,PW,42,'F');
+  doc.setFont('helvetica','bold');
   doc.setFontSize(22);
-  doc.setTextColor(245, 200, 66);
-  doc.text('AutoLoad 3D Planner', margin, y + 8);
+  doc.setTextColor(245,200,66);
+  doc.text('AutoLoad 3D Planner', M, y+8);
   doc.setFontSize(10);
-  doc.setTextColor(138, 144, 168);
-  doc.text('Load Plan Report', margin, y + 16);
-  doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y + 22);
-  y = 50;
+  doc.setTextColor(138,144,168);
+  doc.setFont('helvetica','normal');
+  doc.text(`Load Plan Report — ${r.algorithm}`, M, y+16);
+  doc.text(`Generated: ${new Date().toLocaleString()}`, M, y+22);
+  y = 52;
 
   // Master ref
+  doc.setFont('helvetica','bold');
   doc.setFontSize(11);
-  doc.setTextColor(245, 200, 66);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Master Reference: ${r.masterRef}`, margin, y);
-  y += 6;
-
-  doc.setFontSize(10);
-  doc.setTextColor(100, 110, 140);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Equipment Type: ${r.selectedContainer.name}  |  Total Containers: ${r.containers.length}  |  Total Weight: ${r.totalWeight.toFixed(0)} kg  |  Total CBM: ${r.totalCBM.toFixed(3)} m³`, margin, y);
+  doc.setTextColor(245,200,66);
+  doc.text(`Master Reference: ${masterRef}`, M, y); y+=6;
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9);
+  doc.setTextColor(138,144,168);
+  const totW = r.containers.reduce((s,c)=>s+c.loadedWeight,0);
+  const totCBM = r.containers.reduce((s,c)=>s+c.loadedCBM,0);
+  doc.text(`Equipment: ${r.containers[0]?.eq?.name}  |  Containers: ${r.totalContainers}  |  Total: ${totW.toFixed(0)}kg / ${totCBM.toFixed(3)}m³  |  Avg Util: ${r.avgUtilization}%`, M, y);
   y += 10;
+  doc.setDrawColor(36,40,53); doc.setLineWidth(0.3);
+  doc.line(M,y,PW-M,y); y+=8;
 
-  // Line
-  doc.setDrawColor(36, 40, 53);
-  doc.setLineWidth(0.3);
-  doc.line(margin, y, pageW - margin, y);
-  y += 8;
+  r.containers.forEach(c => {
+    if (y > 240) { doc.addPage(); y = M; }
+    doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(232,234,240);
+    doc.text(`Container ${c.num} — ${c.eq.name}`, M, y); y+=6;
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(138,144,168);
+    doc.text(`Items: ${c.placed.length}  |  Weight: ${c.loadedWeight.toFixed(0)}/${c.eq.maxPayload}kg  |  CBM: ${c.loadedCBM.toFixed(3)}/${c.containerCBM.toFixed(3)}m³  |  Utilization: ${c.utilization}%`, M, y);
+    y+=5;
+    if (c.weightMetrics) {
+      doc.text(`COG — X:${c.weightMetrics.cogX.toFixed(0)}cm Y:${c.weightMetrics.cogY.toFixed(0)}cm Z:${c.weightMetrics.cogZ.toFixed(0)}cm  Balance: ${c.weightMetrics.balanced?'OK':'Review'}`, M, y);
+      y+=5;
+    }
+    y+=2;
 
-  // Per container
-  r.containers.forEach((c, idx) => {
-    if (y > 240) { doc.addPage(); y = margin; }
+    // Shipment breakdown header
+    doc.setFillColor(26,30,39);
+    doc.rect(M,y-1,PW-M*2,6,'F');
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(83,88,112);
+    ['SHIPMENT','ITEMS','WEIGHT (kg)','CBM (m³)','DESCRIPTIONS'].forEach((h,i) => {
+      doc.text(h,[M+2,M+44,M+66,M+96,M+122][i],y+3.5);
+    });
+    y+=8;
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(232, 234, 240);
-    doc.text(`Container ${c.num} — ${c.containerDef.name}`, margin, y);
-    y += 6;
-
-    // Metrics
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(138, 144, 168);
-    doc.text(`Items: ${c.placed.length}  |  Weight: ${c.loadedWeight.toFixed(0)} kg / ${c.containerDef.maxPayload} kg  |  CBM: ${c.loadedCBM.toFixed(3)} m³ / ${c.containerCBM.toFixed(3)} m³  |  Utilization: ${c.utilization}%`, margin, y);
-    y += 7;
-
-    // Shipment breakdown table header
-    doc.setFillColor(26, 30, 39);
-    doc.rect(margin, y - 1, pageW - margin * 2, 6, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(83, 88, 112);
-    doc.text('SHIPMENT ID', margin + 2, y + 3.5);
-    doc.text('ITEMS', margin + 50, y + 3.5);
-    doc.text('WEIGHT (kg)', margin + 70, y + 3.5);
-    doc.text('CBM (m³)', margin + 105, y + 3.5);
-    doc.text('DESCRIPTION SAMPLE', margin + 135, y + 3.5);
-    y += 8;
-
-    // Group by shipment
-    const shipmentMap = {};
+    const sm = {};
     c.placed.forEach(p => {
-      const sid = p.item.shipment;
-      if (!shipmentMap[sid]) shipmentMap[sid] = { count: 0, weight: 0, cbm: 0, descs: new Set() };
-      shipmentMap[sid].count++;
-      shipmentMap[sid].weight += p.item.weight;
-      shipmentMap[sid].cbm += (p.il * p.iw * p.ih) / 1e6;
-      shipmentMap[sid].descs.add(p.item.desc);
+      const s=p.item.shipment;
+      if(!sm[s]) sm[s]={count:0,weight:0,cbm:0,descs:new Set()};
+      sm[s].count++; sm[s].weight+=p.item.weight;
+      sm[s].cbm+=(p.il*p.iw*p.ih)/1e6; sm[s].descs.add(p.item.desc);
     });
 
-    Object.entries(shipmentMap).forEach(([sid, data]) => {
-      if (y > 265) { doc.addPage(); y = margin; }
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.setTextColor(200, 204, 218);
-      doc.text(sid, margin + 2, y);
-      doc.text(String(data.count), margin + 52, y);
-      doc.text(data.weight.toFixed(1), margin + 72, y);
-      doc.text(data.cbm.toFixed(3), margin + 107, y);
-      doc.text([...data.descs].slice(0,2).join(', ').substring(0,30), margin + 137, y);
-      y += 5.5;
+    Object.entries(sm).forEach(([sid,d]) => {
+      if (y>265) { doc.addPage(); y=M; }
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(200,204,218);
+      doc.text(sid, M+2, y);
+      doc.text(String(d.count), M+46, y);
+      doc.text(d.weight.toFixed(1), M+68, y);
+      doc.text(d.cbm.toFixed(3), M+98, y);
+      doc.text([...d.descs].slice(0,2).join(', ').substring(0,28), M+124, y);
+      y+=5.5;
     });
-
-    y += 6;
-    doc.setDrawColor(36, 40, 53);
-    doc.line(margin, y, pageW - margin, y);
-    y += 8;
+    y+=6; doc.setDrawColor(36,40,53); doc.line(M,y,PW-M,y); y+=8;
   });
 
-  // Item detail table
-  if (y > 230) { doc.addPage(); y = margin; }
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(245, 200, 66);
-  doc.text('Full Item List', margin, y);
-  y += 8;
-
-  doc.setFillColor(26, 30, 39);
-  doc.rect(margin, y - 1, pageW - margin * 2, 6, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.setTextColor(83, 88, 112);
-  ['SHIPMENT', 'DESCRIPTION', 'L×W×H (cm)', 'WT (kg)', 'CTR', 'STACK', 'ROT'].forEach((h, i) => {
-    const xPos = [margin+2, margin+28, margin+70, margin+108, margin+128, margin+143, margin+155];
-    doc.text(h, xPos[i], y + 3.5);
+  // Item sequence list
+  if (y>230) { doc.addPage(); y=M; }
+  doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(245,200,66);
+  doc.text('Loading Sequence', M, y); y+=8;
+  doc.setFillColor(26,30,39); doc.rect(M,y-1,PW-M*2,6,'F');
+  doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(83,88,112);
+  ['#','CTR','SHIPMENT','DESCRIPTION','L×W×H (cm)','WT(kg)','POS x,y,z','ROT','STACK'].forEach((h,i) => {
+    const xs=[M+2,M+10,M+20,M+44,M+82,M+112,M+128,M+156,M+167];
+    doc.text(h,xs[i],y+3.5);
   });
-  y += 8;
+  y+=8;
 
   r.containers.forEach(c => {
     c.placed.forEach(p => {
-      if (y > 270) { doc.addPage(); y = margin + 4; }
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.setTextColor(190, 194, 210);
-      doc.text(p.item.shipment.substring(0,12), margin + 2, y);
-      doc.text(p.item.desc.substring(0,18), margin + 28, y);
-      doc.text(`${p.item.l}×${p.item.w}×${p.item.h}`, margin + 70, y);
-      doc.text(p.item.weight.toFixed(1), margin + 108, y);
-      doc.text(String(c.num), margin + 132, y);
-      doc.text(p.item.stackable ? 'Y' : 'N', margin + 147, y);
-      doc.text(p.item.rotatable ? 'Y' : 'N', margin + 159, y);
-      y += 5;
+      if (y>270) { doc.addPage(); y=M+4; }
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(190,194,210);
+      const rotated = p.il!==p.item.l||p.iw!==p.item.w||p.ih!==p.item.h;
+      doc.text(String(p.seq),M+2,y);
+      doc.text(String(c.num),M+12,y);
+      doc.text(p.item.shipment.substring(0,10),M+20,y);
+      doc.text(p.item.desc.substring(0,16),M+44,y);
+      doc.text(`${p.il}×${p.iw}×${p.ih}`,M+82,y);
+      doc.text(p.item.weight.toFixed(0),M+112,y);
+      doc.text(`${p.x.toFixed(0)},${p.y.toFixed(0)},${p.z.toFixed(0)}`,M+128,y);
+      doc.text(rotated?'Y':'N',M+160,y);
+      doc.text(p.item.stackable?'Y':'N',M+170,y);
+      y+=5;
     });
   });
 
-  // Footer
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
+  const pages = doc.internal.getNumberOfPages();
+  for (let i=1;i<=pages;i++) {
     doc.setPage(i);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(83, 88, 112);
-    doc.text(`AutoLoad 3D Planner · Page ${i} of ${totalPages}`, margin, 292);
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(83,88,112);
+    doc.text(`AutoLoad 3D Planner · ${r.algorithm} · Page ${i} of ${pages}`, M, 292);
   }
 
-  doc.save(`AutoLoad3D_${r.masterRef}.pdf`);
-  notify('PDF report downloaded.', 'success');
+  doc.save(`AutoLoad3D_${masterRef}.pdf`);
+  toast('PDF downloaded.', 'success');
 }
+
+// ─── TOAST ───────────────────────────────────────
+function toast(msg, type='') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ─── VIEWER PROXIES ──────────────────────────────
+function resetCam()      { Viewer.resetCamera(); }
+function toggleWF()      { Viewer.toggleWireframe(); }
+function toggleExplode() { Viewer.toggleExplode(); }
 
 // ─── INIT ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  generateMasterRef();
-  renderCargoList();
+  genRef();
+  updateEquipPreview();
+  renderItemList();
+  document.getElementById('page-planner').style.display = 'block';
 });
