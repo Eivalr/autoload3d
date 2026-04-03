@@ -10,7 +10,6 @@
 </head>
 <body>
 
-<!-- ── HEADER ── -->
 <header class="header">
   <div class="header-inner">
     <div class="logo">
@@ -30,13 +29,9 @@
   </div>
 </header>
 
-<!-- ══════════════════════════════════════════
-     PAGE: PLANNER
-══════════════════════════════════════════ -->
 <div id="page-planner" class="page active">
   <div class="workspace">
 
-    <!-- LEFT PANEL -->
     <aside class="panel panel-left">
       <div class="panel-section">
         <div class="section-label">Master Reference</div>
@@ -46,17 +41,34 @@
         </div>
       </div>
 
-      <!-- EQUIPMENT TYPE -->
       <div class="panel-section">
         <div class="section-label">Equipment Type</div>
         <div class="equip-tabs">
+          <button class="equip-tab" onclick="setEquipType('auto',this)">⚡ Auto</button>
           <button class="equip-tab active" onclick="setEquipType('air',this)">✈ Air ULD</button>
           <button class="equip-tab" onclick="setEquipType('sea',this)">🚢 Sea</button>
           <button class="equip-tab" onclick="setEquipType('truck',this)">🚛 Truck</button>
           <button class="equip-tab" onclick="setEquipType('custom',this)">⚙ Custom</button>
         </div>
 
-        <!-- Air ULD selector -->
+        <div id="equip-auto" class="equip-panel">
+          <div class="auto-equip-info">
+            <div class="auto-icon">⚡</div>
+            <p>The system will test all available equipment types and recommend the optimal mix — e.g. <strong>2× 20' GP + 1× 40' HC</strong>.</p>
+            <div class="form-row" style="margin-top:8px">
+              <div class="fc">
+                <label class="sub-lbl">Preferred Mode</label>
+                <select id="auto-mode" class="inp sm">
+                  <option value="sea">Sea Containers</option>
+                  <option value="air">Air ULDs</option>
+                  <option value="truck">Truck/Trailer</option>
+                  <option value="all">All Types</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div id="equip-air" class="equip-panel active">
           <select id="uld-select" class="inp" onchange="updateEquipPreview()">
             <option value="LD1">LD-1 (AKE) — 156×153×163 cm</option>
@@ -67,7 +79,6 @@
           </select>
         </div>
 
-        <!-- Sea selector -->
         <div id="equip-sea" class="equip-panel">
           <select id="sea-select" class="inp" onchange="updateEquipPreview()">
             <option value="20GP">20' General Purpose — 589×235×239 cm</option>
@@ -77,7 +88,6 @@
           </select>
         </div>
 
-        <!-- Truck selector -->
         <div id="equip-truck" class="equip-panel">
           <select id="truck-select" class="inp" onchange="updateEquipPreview()">
             <option value="53FT">53' Trailer — 1603×250×274 cm</option>
@@ -86,7 +96,6 @@
           </select>
         </div>
 
-        <!-- Custom -->
         <div id="equip-custom" class="equip-panel">
           <div class="form-row three">
             <div class="fc"><label class="sub-lbl">L (cm)</label><input id="custom-l" class="inp sm" type="number" placeholder="600"/></div>
@@ -98,11 +107,9 @@
           </div>
         </div>
 
-        <!-- Preview -->
         <div id="equipPreview" class="equip-preview"></div>
       </div>
 
-      <!-- CARGO ITEM FORM -->
       <div class="panel-section">
         <div class="section-label">Add Cargo Item</div>
         <div class="cargo-form">
@@ -149,7 +156,6 @@
         </div>
       </div>
 
-      <!-- CSV -->
       <div class="panel-section">
         <div class="section-label">Bulk Upload</div>
         <label class="upload-zone" for="csvFile">
@@ -166,9 +172,7 @@
       </div>
     </aside>
 
-    <!-- CENTER -->
     <section class="panel-center">
-      <!-- Cargo list -->
       <div class="cargo-list-area" id="cargoListArea">
         <div class="area-header">
           <span class="area-title">Cargo Items <span class="badge" id="itemBadge">0</span></span>
@@ -179,7 +183,6 @@
         </div>
       </div>
 
-      <!-- Algorithm comparison -->
       <div id="algoCompare" class="algo-compare" style="display:none">
         <div class="area-header">
           <span class="area-title">Algorithm Comparison — Pick Best Result</span>
@@ -187,7 +190,6 @@
         <div class="algo-cards" id="algoCards"></div>
       </div>
 
-      <!-- 3D Viewer -->
       <div id="viewerArea" class="viewer-area" style="display:none">
         <div class="viewer-toolbar">
           <div class="viewer-left">
@@ -207,7 +209,6 @@
       </div>
     </section>
 
-    <!-- RIGHT PANEL: Summary -->
     <aside class="panel panel-right" id="summaryPanel">
       <div class="panel-section no-border">
         <div class="section-label">Load Summary</div>
@@ -226,9 +227,6 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     PAGE: GUIDED LOADING
-══════════════════════════════════════════ -->
 <div id="page-guided" class="page" style="display:none">
   <div class="guided-wrap">
     <div class="guided-header">
@@ -244,27 +242,22 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════════
-     PAGE: ABOUT
-══════════════════════════════════════════ -->
 <div id="page-about" class="page" style="display:none">
   <div class="about-wrap">
     <h1>How AutoLoad 3D Works</h1>
     <div class="about-grid">
       <div class="about-card"><div class="about-n">01</div><h3>Input Cargo</h3><p>Add items manually or via CSV. Each item carries dimensions, weight, shipment reference, stackability, and rotation rules.</p></div>
-      <div class="about-card"><div class="about-n">02</div><h3>Three Algorithms</h3><p>LAFF, DBLF, and Layer Builder each solve the packing problem differently. The app runs all three and shows you a side-by-side comparison so you pick the best result.</p></div>
-      <div class="about-card"><div class="about-n">03</div><h3>Realistic Constraints</h3><p>Stacking priority, crush limits, category rules, weight distribution, and center-of-gravity checks are all enforced — not just volume optimization.</p></div>
+      <div class="about-card"><div class="about-n">02</div><h3>Three Algorithms</h3><p>LAFF, DBLF, and Layer Builder each solve the packing problem differently. The app runs all three and shows a side-by-side comparison.</p></div>
+      <div class="about-card"><div class="about-n">03</div><h3>Realistic Constraints</h3><p>Stacking priority, crush limits, category rules, weight distribution, and COG checks are all enforced — not just volume optimization.</p></div>
       <div class="about-card"><div class="about-n">04</div><h3>All Equipment Types</h3><p>Air ULDs with accurate contoured shapes, sea containers, trucks with axle weight awareness, and fully custom equipment definitions.</p></div>
-      <div class="about-card"><div class="about-n">05</div><h3>3D Visualization</h3><p>Interactive Three.js viewer with rotation, zoom, wireframe, explode mode, and hover tooltips per item. Color-coded by shipment.</p></div>
+      <div class="about-card"><div class="about-n">05</div><h3>3D Visualization</h3><p>Interactive Three.js viewer with rotation, zoom, wireframe, explode mode, and hover tooltips. Shipment ID labels on every box.</p></div>
       <div class="about-card"><div class="about-n">06</div><h3>Guided Loading</h3><p>Step-by-step printable instructions for warehouse staff. Each piece gets a sequence number, exact position, and rotation call-out.</p></div>
     </div>
   </div>
 </div>
 
-<!-- Tooltip -->
 <div id="tooltip" class="tooltip" style="display:none"></div>
 
-<!-- Scripts -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="equipment.js"></script>
