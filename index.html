@@ -4,8 +4,6 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AutoLoad 3D Planner</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
@@ -16,24 +14,26 @@
       <span class="logo-mark">▦</span>
       <span class="logo-text">AutoLoad<span class="logo-accent">3D</span></span>
     </div>
-    <nav class="header-nav">
-      <button class="nav-btn active" onclick="showPage('planner')">Planner</button>
-      <button class="nav-btn" onclick="showPage('guided')">Guided Loading</button>
+    <nav class="header-nav" id="mainNav">
+      <button class="nav-btn active" onclick="showPage('input')">Input</button>
+      <button class="nav-btn" id="nav-results" onclick="showPage('results')" style="display:none">Results</button>
+      <button class="nav-btn" id="nav-guided" onclick="showPage('guided')" style="display:none">Guided Loading</button>
       <button class="nav-btn" onclick="showPage('about')">How It Works</button>
     </nav>
     <div class="header-actions">
-      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
-        <span class="theme-icon">◐</span>
-      </button>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme"><span class="theme-icon">◐</span></button>
     </div>
   </div>
 </header>
 
-<div id="page-planner" class="page active">
-  <div class="workspace">
+<!-- ══ PAGE: INPUT ══ -->
+<div id="page-input" class="page active">
+  <div class="input-layout">
 
-    <aside class="panel panel-left">
-      <div class="panel-section">
+    <!-- LEFT COLUMN: Config -->
+    <div class="input-col input-col-left">
+
+      <div class="col-section">
         <div class="section-label">Master Reference</div>
         <div class="master-row">
           <input id="masterRef" class="inp" type="text" placeholder="MLD-2025-001"/>
@@ -41,7 +41,7 @@
         </div>
       </div>
 
-      <div class="panel-section">
+      <div class="col-section">
         <div class="section-label">Equipment Type</div>
         <div class="equip-tabs">
           <button class="equip-tab" onclick="setEquipType('auto',this)">⚡ Auto</button>
@@ -50,14 +50,11 @@
           <button class="equip-tab" onclick="setEquipType('truck',this)">🚛 Truck</button>
           <button class="equip-tab" onclick="setEquipType('custom',this)">⚙ Custom</button>
         </div>
-
         <div id="equip-auto" class="equip-panel">
           <div class="auto-equip-info">
-            <div class="auto-icon">⚡</div>
-            <p>The system will test all available equipment types and recommend the optimal mix — e.g. <strong>2× 20' GP + 1× 40' HC</strong>.</p>
+            <p>⚡ System will test all equipment types and recommend the optimal mix — e.g. <strong>2× 20' GP + 1× 40' HC</strong>.</p>
             <div class="form-row" style="margin-top:8px">
-              <div class="fc">
-                <label class="sub-lbl">Preferred Mode</label>
+              <div class="fc"><label class="sub-lbl">Preferred Mode</label>
                 <select id="auto-mode" class="inp sm">
                   <option value="sea">Sea Containers</option>
                   <option value="air">Air ULDs</option>
@@ -68,7 +65,6 @@
             </div>
           </div>
         </div>
-
         <div id="equip-air" class="equip-panel active">
           <select id="uld-select" class="inp" onchange="updateEquipPreview()">
             <option value="LD1">LD-1 (AKE) — 156×153×163 cm</option>
@@ -78,7 +74,6 @@
             <option value="PMC">PMC (P6P) — 317×244×163 cm</option>
           </select>
         </div>
-
         <div id="equip-sea" class="equip-panel">
           <select id="sea-select" class="inp" onchange="updateEquipPreview()">
             <option value="20GP">20' General Purpose — 589×235×239 cm</option>
@@ -87,7 +82,6 @@
             <option value="45HC">45' High Cube — 1357×235×269 cm</option>
           </select>
         </div>
-
         <div id="equip-truck" class="equip-panel">
           <select id="truck-select" class="inp" onchange="updateEquipPreview()">
             <option value="53FT">53' Trailer — 1603×250×274 cm</option>
@@ -95,22 +89,39 @@
             <option value="40FT">40' Trailer — 1220×250×274 cm</option>
           </select>
         </div>
-
         <div id="equip-custom" class="equip-panel">
           <div class="form-row three">
             <div class="fc"><label class="sub-lbl">L (cm)</label><input id="custom-l" class="inp sm" type="number" placeholder="600"/></div>
             <div class="fc"><label class="sub-lbl">W (cm)</label><input id="custom-w" class="inp sm" type="number" placeholder="240"/></div>
             <div class="fc"><label class="sub-lbl">H (cm)</label><input id="custom-h" class="inp sm" type="number" placeholder="240"/></div>
           </div>
-          <div class="form-row">
+          <div class="form-row" style="margin-top:7px">
             <div class="fc"><label class="sub-lbl">Max Payload (kg)</label><input id="custom-payload" class="inp sm" type="number" placeholder="20000"/></div>
           </div>
         </div>
-
         <div id="equipPreview" class="equip-preview"></div>
       </div>
 
-      <div class="panel-section">
+      <div class="col-section">
+        <div class="section-label">Bulk Upload</div>
+        <label class="upload-zone" for="csvFile">
+          <span class="upload-icon">↑</span><span>Drop CSV or click</span>
+          <input type="file" id="csvFile" accept=".csv" onchange="loadCSV(event)" style="display:none"/>
+        </label>
+        <a href="#" class="link-xs" onclick="dlTemplate()">↓ Download CSV template</a>
+      </div>
+
+      <div class="col-section">
+        <button class="btn-accent full" id="calcBtn" onclick="runAll()">
+          <span>Calculate Load Plan</span><span class="btn-arr">→</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: Cargo Form + List -->
+    <div class="input-col input-col-right">
+
+      <div class="col-section">
         <div class="section-label">Add Cargo Item</div>
         <div class="cargo-form">
           <div class="form-row">
@@ -128,18 +139,14 @@
             <div class="fc"><label class="sub-lbl">Max Top (kg)</label><input id="ci-maxload" class="inp sm" type="number" placeholder="100"/></div>
           </div>
           <div class="form-row">
-            <div class="fc">
-              <label class="sub-lbl">Category</label>
+            <div class="fc"><label class="sub-lbl">Category</label>
               <select id="ci-cat" class="inp sm">
-                <option value="box">Box</option>
-                <option value="pallet">Pallet</option>
-                <option value="crate">Crate</option>
-                <option value="barrel">Barrel</option>
+                <option value="box">Box</option><option value="pallet">Pallet</option>
+                <option value="crate">Crate</option><option value="barrel">Barrel</option>
                 <option value="custom">Custom</option>
               </select>
             </div>
-            <div class="fc">
-              <label class="sub-lbl">Stack Priority</label>
+            <div class="fc"><label class="sub-lbl">Stack Priority</label>
               <select id="ci-prio" class="inp sm">
                 <option value="3">3 – Strong Base</option>
                 <option value="2" selected>2 – Medium</option>
@@ -156,102 +163,90 @@
         </div>
       </div>
 
-      <div class="panel-section">
-        <div class="section-label">Bulk Upload</div>
-        <label class="upload-zone" for="csvFile">
-          <span class="upload-icon">↑</span><span>Drop CSV or click</span>
-          <input type="file" id="csvFile" accept=".csv" onchange="loadCSV(event)" style="display:none"/>
-        </label>
-        <a href="#" class="link-xs" onclick="dlTemplate()">↓ Download CSV template</a>
-      </div>
-
-      <div class="panel-section">
-        <button class="btn-accent full" id="calcBtn" onclick="runAll()">
-          <span>Calculate Load Plan</span><span class="btn-arr">→</span>
-        </button>
-      </div>
-    </aside>
-
-    <section class="panel-center">
-      <div class="cargo-list-area" id="cargoListArea">
+      <div class="col-section cargo-list-section">
         <div class="area-header">
           <span class="area-title">Cargo Items <span class="badge" id="itemBadge">0</span></span>
           <button class="btn-ghost-xs" onclick="clearItems()">Clear all</button>
         </div>
         <div id="cargoTable" class="cargo-table">
-          <div class="empty-msg"><div class="empty-ico">▦</div><p>No items yet. Add cargo on the left.</p></div>
+          <div class="empty-msg"><div class="empty-ico">▦</div><p>No items yet. Fill in the form above.</p></div>
         </div>
       </div>
 
-      <div id="algoCompare" class="algo-compare" style="display:none">
-        <div class="area-header">
-          <span class="area-title">Algorithm Comparison — Pick Best Result</span>
-        </div>
-        <div class="algo-cards" id="algoCards"></div>
-      </div>
-
-      <div id="viewerArea" class="viewer-area" style="display:none">
-        <div class="viewer-toolbar">
-          <div class="viewer-left">
-            <span class="area-title" id="viewerTitle">3D View</span>
-            <div id="ctrTabs" class="ctr-tabs"></div>
-          </div>
-          <div class="viewer-right">
-            <button class="tbtn" onclick="resetCam()" title="Reset">⌖</button>
-            <button class="tbtn" onclick="toggleWF()" title="Wireframe">⬚</button>
-            <button class="tbtn" onclick="toggleExplode()" title="Explode">⊞</button>
-            <button class="tbtn" onclick="doExportPNG()" title="PNG">↓PNG</button>
-          </div>
-        </div>
-        <div id="threeMount" class="three-mount"></div>
-        <div id="viewerLegend" class="viewer-legend"></div>
-        <div class="viewer-hint">Drag · Scroll zoom · Right-click pan · Hover for details</div>
-      </div>
-    </section>
-
-    <aside class="panel panel-right" id="summaryPanel">
-      <div class="panel-section no-border">
-        <div class="section-label">Load Summary</div>
-      </div>
-      <div id="summaryBody">
-        <div class="empty-msg" style="padding:40px 20px">
-          <div class="empty-ico">◫</div><p>Run a calculation to see results.</p>
-        </div>
-      </div>
-      <div id="summaryFooter" class="summary-footer" style="display:none">
-        <button class="btn-primary full" onclick="doExportPDF()">↓ PDF Report</button>
-        <button class="btn-ghost full mt-xs" onclick="doExportPNG()">↓ 3D Snapshot</button>
-        <button class="btn-ghost full mt-xs" onclick="showGuidedFromResult()">☰ Guided Loading</button>
-      </div>
-    </aside>
+    </div>
   </div>
 </div>
 
+<!-- ══ PAGE: RESULTS ══ -->
+<div id="page-results" class="page" style="display:none">
+  <div class="results-layout">
+
+    <!-- Algorithm picker (shown first, hidden after choice) -->
+    <div id="algoPickWrap" class="algo-pick-wrap">
+      <div class="results-topbar">
+        <div>
+          <h2 class="results-title">Choose Algorithm</h2>
+          <p class="results-sub">All three ran on your cargo. Pick the result that works best for you.</p>
+        </div>
+        <button class="btn-ghost" onclick="showPage('input')">← Back to Input</button>
+      </div>
+      <div id="autoBannerResult" style="display:none"></div>
+      <div class="algo-cards" id="algoCards"></div>
+    </div>
+
+    <!-- Main results (shown after picking algo) -->
+    <div id="resultsMain" style="display:none">
+      <div class="results-topbar">
+        <div class="results-topbar-left">
+          <button class="btn-ghost" onclick="backToAlgoPicker()">← Change Algorithm</button>
+          <span class="results-master-badge" id="resultsMasterBadge"></span>
+          <span class="results-algo-badge" id="resultsAlgoBadge"></span>
+        </div>
+        <div class="results-topbar-right">
+          <button class="tbtn" onclick="doExportPDF()">↓ PDF Report</button>
+          <button class="tbtn" onclick="doExportAllPNG()">↓ All Snapshots</button>
+          <button class="tbtn" onclick="showPage('guided')">☰ Guided Loading</button>
+        </div>
+      </div>
+
+      <div class="results-body">
+        <!-- 3D Viewers for all containers -->
+        <div class="viewers-grid" id="viewersGrid"></div>
+        <!-- Summary panel -->
+        <div class="results-summary" id="resultsSummary"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══ PAGE: GUIDED LOADING ══ -->
 <div id="page-guided" class="page" style="display:none">
   <div class="guided-wrap">
     <div class="guided-header">
       <h1>Guided Loading Instructions</h1>
       <div class="guided-actions">
-        <button class="btn-ghost" onclick="showPage('planner')">← Back to Planner</button>
+        <button class="btn-ghost" onclick="showPage('results')">← Back to Results</button>
         <button class="btn-primary" onclick="printGuided()">Print / Save PDF</button>
       </div>
     </div>
     <div id="guidedContent" class="guided-content">
-      <div class="empty-msg"><p>Run a load calculation first, then come back here.</p></div>
+      <div class="empty-msg"><p>Run a load calculation first.</p></div>
     </div>
   </div>
 </div>
 
+<!-- ══ PAGE: ABOUT ══ -->
 <div id="page-about" class="page" style="display:none">
   <div class="about-wrap">
     <h1>How AutoLoad 3D Works</h1>
     <div class="about-grid">
       <div class="about-card"><div class="about-n">01</div><h3>Input Cargo</h3><p>Add items manually or via CSV. Each item carries dimensions, weight, shipment reference, stackability, and rotation rules.</p></div>
-      <div class="about-card"><div class="about-n">02</div><h3>Three Algorithms</h3><p>LAFF, DBLF, and Layer Builder each solve the packing problem differently. The app runs all three and shows a side-by-side comparison.</p></div>
-      <div class="about-card"><div class="about-n">03</div><h3>Realistic Constraints</h3><p>Stacking priority, crush limits, category rules, weight distribution, and COG checks are all enforced — not just volume optimization.</p></div>
-      <div class="about-card"><div class="about-n">04</div><h3>All Equipment Types</h3><p>Air ULDs with accurate contoured shapes, sea containers, trucks with axle weight awareness, and fully custom equipment definitions.</p></div>
-      <div class="about-card"><div class="about-n">05</div><h3>3D Visualization</h3><p>Interactive Three.js viewer with rotation, zoom, wireframe, explode mode, and hover tooltips. Shipment ID labels on every box.</p></div>
-      <div class="about-card"><div class="about-n">06</div><h3>Guided Loading</h3><p>Step-by-step printable instructions for warehouse staff. Each piece gets a sequence number, exact position, and rotation call-out.</p></div>
+      <div class="about-card"><div class="about-n">02</div><h3>Three Algorithms</h3><p>LAFF, DBLF, and Layer Builder each solve the packing problem differently. Compare all three and pick the best result.</p></div>
+      <div class="about-card"><div class="about-n">03</div><h3>Realistic Constraints</h3><p>Stacking priority, crush limits, category rules, weight distribution, and COG checks are all enforced.</p></div>
+      <div class="about-card"><div class="about-n">04</div><h3>All Equipment Types</h3><p>Air ULDs with accurate contoured shapes, sea containers, trucks with axle weight awareness, and custom equipment.</p></div>
+      <div class="about-card"><div class="about-n">05</div><h3>3D Visualization</h3><p>Interactive Three.js viewer with rotation, zoom, wireframe, explode mode, and shipment ID printed on every box.</p></div>
+      <div class="about-card"><div class="about-n">06</div><h3>Guided Loading</h3><p>Step-by-step printable instructions for warehouse staff with sequence numbers, exact positions, and rotation callouts.</p></div>
     </div>
   </div>
 </div>
