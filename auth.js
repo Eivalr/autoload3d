@@ -1,5 +1,6 @@
 /* =============================================
    auth.js — Supabase Auth + Saved Loadings
+   Supports new sb_publishable key format
    ============================================= */
 
 'use strict';
@@ -7,71 +8,68 @@
 const SUPABASE_URL = 'https://kxybwmmkqcdnwemtrxzq.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_B8xnwHjMoOCtxByuxUkb2A_9UL9xFLy';
 
-// ── SUPABASE CLIENT (lightweight, no SDK needed) ──
+// ── SUPABASE CLIENT ──────────────────────────
 const SB = {
   async req(method, path, body = null, token = null) {
-    const headers = {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_KEY,
-    };
+    const headers = { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${SUPABASE_URL}${path}`, {
-      method,
-      headers,
+      method, headers,
       body: body ? JSON.stringify(body) : null,
     });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error_description || data.message || data.msg || 'Request failed');
+    let data;
+    try { data = await res.json(); } catch { data = {}; }
+    if (!res.ok) {
+      const msg = data.error_description || data.message || data.msg || data.error || JSON.stringify(data);
+      throw new Error(msg);
+    }
     return data;
   },
-
-  async authReq(method, path, body) {
-    return this.req(method, `/auth/v1${path}`, body);
-  },
-
-  async dbReq(method, path, body = null, token) {
-    return this.req(method, `/rest/v1${path}`, body, token);
-  },
+  auth(method, path, body) { return this.req(method, `/auth/v1${path}`, body); },
+  db(method, path, body, token) { return this.req(method, `/rest/v1${path}`, body, token); },
 };
 
-// ── SESSION STORAGE ──
+// ── SESSION ──────────────────────────────────
 const Session = {
-  get() {
-    try { return JSON.parse(localStorage.getItem('al3d_session')); } catch { return null; }
-  },
+  get() { try { return JSON.parse(localStorage.getItem('al3d_session')); } catch { return null; } },
   set(s) { localStorage.setItem('al3d_session', JSON.stringify(s)); },
   clear() { localStorage.removeItem('al3d_session'); },
 };
 
-// ── AUTH STATE ──
 let AuthState = { user: null, token: null, profile: null };
 
+// ── INIT ─────────────────────────────────────
 async function initAuth() {
   const s = Session.get();
-  if (!s) return showAuthModal('login');
-
+  if (!s?.refresh_token) return showAuthModal('login');
   try {
-    // Refresh session
-    const data = await SB.authReq('POST', '/token?grant_type=refresh_token', {
-      refresh_token: s.refresh_token,
-    });
-    AuthState.token = data.access_token;
-    AuthState.user = data.user;
-    Session.set({ access_token: data.access_token, refresh_token: data.refresh_token });
+    const data = await SB.auth('POST', '/token?grant_type=refresh_token', { refresh_token: s.refresh_token });
+    setSession(data);
     await loadProfile();
     onAuthReady();
-  } catch {
+  } catch(e) {
     Session.clear();
     showAuthModal('login');
   }
 }
 
+// Extract user + token from any Supabase auth response (handles both old and new formats)
+function setSession(data) {
+  // New format: data.session.access_token + data.user
+  // Old format: data.access_token + data.user
+  const token = data?.session?.access_token || data?.access_token;
+  const refreshToken = data?.session?.refresh_token || data?.refresh_token;
+  const user = data?.user;
+  if (!token || !user) throw new Error('Invalid session response from Supabase');
+  AuthState.token = token;
+  AuthState.user = user;
+  Session.set({ access_token: token, refresh_token: refreshToken });
+}
+
 async function loadProfile() {
   try {
-    const rows = await SB.dbReq('GET',
-      `/profiles?user_id=eq.${AuthState.user.id}&select=*`,
-      null, AuthState.token);
-    AuthState.profile = rows[0] || null;
+    const rows = await SB.db('GET', `/profiles?user_id=eq.${AuthState.user.id}&select=*`, null, AuthState.token);
+    AuthState.profile = Array.isArray(rows) ? (rows[0] || null) : null;
   } catch { AuthState.profile = null; }
 }
 
@@ -80,63 +78,93 @@ function onAuthReady() {
   document.getElementById('appShell').style.display = 'block';
   updateUserBadge();
   loadSavedLoadings();
+  // Also init the main app
+  if (typeof genRef === 'function') {
+    genRef(); updateEquipPreview(); renderItemList();
+    document.getElementById('page-input').style.display = 'block';
+  }
 }
 
 function updateUserBadge() {
-  const name = AuthState.profile?.full_name || AuthState.user?.email || '';
+  const name = AuthState.profile?.full_name || AuthState.user?.email?.split('@')[0] || '';
   const company = AuthState.profile?.company_name || '';
   document.getElementById('userBadge').textContent = company ? `${name} · ${company}` : name;
 }
 
-// ── LOGIN ──
+// ── LOGIN ─────────────────────────────────────
 async function doLogin() {
   const email = document.getElementById('authEmail').value.trim();
   const pass = document.getElementById('authPass').value;
   if (!email || !pass) { authError('Enter email and password.'); return; }
   setAuthLoading(true);
   try {
-    const data = await SB.authReq('POST', '/token?grant_type=password', {
-      email, password: pass,
-    });
-    AuthState.token = data.access_token;
-    AuthState.user = data.user;
-    Session.set({ access_token: data.access_token, refresh_token: data.refresh_token });
+    const data = await SB.auth('POST', '/token?grant_type=password', { email, password: pass });
+    setSession(data);
     await loadProfile();
     onAuthReady();
   } catch(e) {
-    authError(e.message);
+    authError(e.message.includes('Invalid login') ? 'Invalid email or password.' : e.message);
   } finally { setAuthLoading(false); }
 }
 
-// ── REGISTER ──
+// ── REGISTER ──────────────────────────────────
 async function doRegister() {
   const email = document.getElementById('authEmail').value.trim();
   const pass = document.getElementById('authPass').value;
   const name = document.getElementById('authName').value.trim();
   const company = document.getElementById('authCompany').value.trim();
-  if (!email || !pass || !name) { authError('Name, email and password required.'); return; }
+  if (!email || !pass || !name) { authError('Name, email and password are required.'); return; }
   if (pass.length < 6) { authError('Password must be at least 6 characters.'); return; }
   setAuthLoading(true);
   try {
-    // Sign up
-    const data = await SB.authReq('POST', '/signup', { email, password: pass });
-    AuthState.token = data.access_token;
-    AuthState.user = data.user;
-    Session.set({ access_token: data.access_token, refresh_token: data.refresh_token });
-    // Create profile
-    await SB.dbReq('POST', '/profiles', {
-      user_id: AuthState.user.id,
-      full_name: name,
-      company_name: company || null,
-    }, AuthState.token);
+    // Step 1: Sign up
+    const signupData = await SB.auth('POST', '/signup', {
+      email, password: pass,
+      options: { emailRedirectTo: window.location.href }
+    });
+
+    // Step 2: Try to get a session — may need email confirmation
+    const token = signupData?.session?.access_token || signupData?.access_token;
+    const user = signupData?.user;
+
+    if (!user) throw new Error('Signup failed — no user returned.');
+
+    if (!token) {
+      // Email confirmation required
+      authError('');
+      document.getElementById('authError').style.color = 'var(--green)';
+      document.getElementById('authError').textContent = 'Account created! Check your email to confirm, then sign in.';
+      setAuthMode('login');
+      setAuthLoading(false);
+      return;
+    }
+
+    // Step 3: Set session and create profile
+    AuthState.token = token;
+    AuthState.user = user;
+    const refreshToken = signupData?.session?.refresh_token || signupData?.refresh_token;
+    Session.set({ access_token: token, refresh_token: refreshToken });
+
+    // Step 4: Create profile row
+    try {
+      await SB.db('POST', '/profiles', {
+        user_id: user.id,
+        full_name: name,
+        company_name: company || null,
+      }, token);
+    } catch(profileErr) {
+      // Profile creation failed but auth succeeded — not fatal
+      console.warn('Profile creation failed:', profileErr.message);
+    }
+
     await loadProfile();
     onAuthReady();
   } catch(e) {
-    authError(e.message);
+    authError(e.message.includes('already registered') ? 'This email is already registered. Try signing in.' : e.message);
   } finally { setAuthLoading(false); }
 }
 
-// ── LOGOUT ──
+// ── LOGOUT ───────────────────────────────────
 function doLogout() {
   Session.clear();
   AuthState = { user: null, token: null, profile: null };
@@ -144,7 +172,7 @@ function doLogout() {
   showAuthModal('login');
 }
 
-// ── MODAL UI ──
+// ── MODAL UI ─────────────────────────────────
 function showAuthModal(mode) {
   document.getElementById('authModal').style.display = 'flex';
   document.getElementById('appShell').style.display = 'none';
@@ -158,19 +186,23 @@ function setAuthMode(mode) {
   document.getElementById('authCompanyRow').style.display = isLogin ? 'none' : 'block';
   document.getElementById('authSubmitBtn').textContent = isLogin ? 'Sign In' : 'Create Account';
   document.getElementById('authToggleLink').textContent = isLogin ? "Don't have an account? Register" : 'Already have an account? Sign In';
-  document.getElementById('authToggleLink').onclick = () => setAuthMode(isLogin ? 'register' : 'login');
+  document.getElementById('authToggleLink').onclick = (e) => { e.preventDefault(); setAuthMode(isLogin ? 'register' : 'login'); };
   document.getElementById('authError').textContent = '';
+  document.getElementById('authError').style.color = 'var(--red)';
   document.getElementById('authModal').dataset.mode = mode;
 }
 
 function authError(msg) {
-  document.getElementById('authError').textContent = msg;
+  const el = document.getElementById('authError');
+  el.style.color = 'var(--red)';
+  el.textContent = msg;
 }
 
 function setAuthLoading(v) {
-  document.getElementById('authSubmitBtn').disabled = v;
-  document.getElementById('authSubmitBtn').textContent = v ? 'Please wait…' :
-    (document.getElementById('authModal').dataset.mode === 'login' ? 'Sign In' : 'Create Account');
+  const btn = document.getElementById('authSubmitBtn');
+  btn.disabled = v;
+  if (v) btn.textContent = 'Please wait…';
+  else btn.textContent = document.getElementById('authModal').dataset.mode === 'login' ? 'Sign In' : 'Create Account';
 }
 
 function handleAuthSubmit() {
@@ -178,13 +210,15 @@ function handleAuthSubmit() {
   else doRegister();
 }
 
-// ── SAVED LOADINGS ──
+// ── SAVED LOADINGS ────────────────────────────
 async function saveCurrentLoading() {
   if (!AppState.chosenAlgo) { toast('No result to save.', 'error'); return; }
   if (!AuthState.token) { toast('Please sign in to save.', 'error'); return; }
 
   const masterRef = document.getElementById('masterRef').value || 'AUTO';
   const eq = AppState.chosenAlgo.containers[0]?.eq;
+  const totW = AppState.chosenAlgo.containers.reduce((s,c)=>s+c.loadedWeight,0);
+  const totCBM = AppState.chosenAlgo.containers.reduce((s,c)=>s+c.loadedCBM,0);
 
   const payload = {
     user_id: AuthState.user.id,
@@ -193,20 +227,20 @@ async function saveCurrentLoading() {
     equipment_id: eq?.id || 'CUSTOM',
     equipment_name: eq?.name || 'Custom',
     algorithm: AppState.chosenAlgo.algorithm,
-    cargo_items: JSON.stringify(AppState.items),
-    result_summary: JSON.stringify({
+    cargo_items: AppState.items,
+    result_summary: {
       totalContainers: AppState.chosenAlgo.totalContainers,
       avgUtilization: AppState.chosenAlgo.avgUtilization,
-      totalWeight: AppState.chosenAlgo.containers.reduce((s,c)=>s+c.loadedWeight,0),
-      totalCBM: AppState.chosenAlgo.containers.reduce((s,c)=>s+c.loadedCBM,0),
-    }),
-    result_full: JSON.stringify(AppState.chosenAlgo),
+      totalWeight: totW,
+      totalCBM: totCBM,
+    },
+    result_full: AppState.chosenAlgo,
     notes: '',
   };
 
   try {
-    await SB.dbReq('POST', '/loadings', payload, AuthState.token);
-    toast(`Loading "${masterRef}" saved.`, 'success');
+    await SB.db('POST', '/loadings', payload, AuthState.token);
+    toast(`"${masterRef}" saved successfully.`, 'success');
     loadSavedLoadings();
   } catch(e) {
     toast('Save failed: ' + e.message, 'error');
@@ -216,30 +250,32 @@ async function saveCurrentLoading() {
 async function loadSavedLoadings() {
   if (!AuthState.token) return;
   try {
-    const rows = await SB.dbReq('GET',
+    const rows = await SB.db('GET',
       `/loadings?user_id=eq.${AuthState.user.id}&order=created_at.desc&select=id,master_ref,equipment_name,algorithm,result_summary,created_at,notes`,
       null, AuthState.token);
-    renderSavedList(rows);
-  } catch(e) {
-    console.error('Failed to load saved loadings:', e);
-  }
+    renderSavedList(Array.isArray(rows) ? rows : []);
+  } catch(e) { console.error('Load saved failed:', e); }
 }
 
 function renderSavedList(rows) {
   const el = document.getElementById('savedList');
   if (!el) return;
-  if (!rows || rows.length === 0) {
-    el.innerHTML = `<div class="saved-empty">No saved loadings yet. Run a calculation and click Save.</div>`;
+  if (!rows.length) {
+    el.innerHTML = `<div class="saved-empty">No saved loadings yet.<br>Run a calculation and click <strong>Save</strong>.</div>`;
     return;
   }
   el.innerHTML = rows.map(r => {
-    const s = JSON.parse(r.result_summary || '{}');
+    const s = r.result_summary || {};
     const d = new Date(r.created_at).toLocaleDateString();
+    const totW = typeof s === 'string' ? JSON.parse(s).totalWeight : s.totalWeight;
+    const totCBM = typeof s === 'string' ? JSON.parse(s).totalCBM : s.totalCBM;
+    const ctrs = typeof s === 'string' ? JSON.parse(s).totalContainers : s.totalContainers;
+    const util = typeof s === 'string' ? JSON.parse(s).avgUtilization : s.avgUtilization;
     return `<div class="saved-row" id="saved-${r.id}">
       <div class="saved-info" onclick="openSavedLoading('${r.id}')">
         <div class="saved-ref">${r.master_ref}</div>
-        <div class="saved-meta">${r.equipment_name} · ${r.algorithm} · ${s.totalContainers || '?'} CTR · ${parseFloat(s.avgUtilization||0).toFixed(1)}% util</div>
-        <div class="saved-meta">${d} · ${(s.totalWeight||0).toFixed(0)}kg · ${(s.totalCBM||0).toFixed(2)}m³</div>
+        <div class="saved-meta">${r.equipment_name || ''} · ${r.algorithm || ''} · ${ctrs || '?'} CTR · ${parseFloat(util||0).toFixed(1)}% util</div>
+        <div class="saved-meta">${d} · ${parseFloat(totW||0).toFixed(0)}kg · ${parseFloat(totCBM||0).toFixed(2)}m³</div>
         ${r.notes ? `<div class="saved-notes">${r.notes}</div>` : ''}
       </div>
       <div class="saved-actions">
@@ -252,28 +288,22 @@ function renderSavedList(rows) {
 
 async function openSavedLoading(id) {
   try {
-    const rows = await SB.dbReq('GET',
-      `/loadings?id=eq.${id}&select=*`,
-      null, AuthState.token);
-    const row = rows[0];
-    if (!row) return;
+    const rows = await SB.db('GET', `/loadings?id=eq.${id}&select=*`, null, AuthState.token);
+    const row = rows[0]; if (!row) return;
 
-    // Restore items
-    AppState.items = JSON.parse(row.cargo_items || '[]');
+    AppState.items = Array.isArray(row.cargo_items) ? row.cargo_items : JSON.parse(row.cargo_items || '[]');
     renderItemList();
 
-    // Restore equipment type
     const eqType = row.equipment_type || 'sea';
-    const btn = document.querySelector(`.equip-tab:nth-child(${['auto','air','sea','truck','custom'].indexOf(eqType)+1})`);
-    if (btn) setEquipType(eqType, btn);
+    const tabs = document.querySelectorAll('.equip-tab');
+    const typeMap = ['auto','air','sea','truck','custom'];
+    const tabIdx = typeMap.indexOf(eqType);
+    if (tabIdx >= 0 && tabs[tabIdx]) setEquipType(eqType, tabs[tabIdx]);
 
-    // Restore master ref
     document.getElementById('masterRef').value = row.master_ref;
 
-    // Restore result
-    const result = JSON.parse(row.result_full || 'null');
+    const result = typeof row.result_full === 'string' ? JSON.parse(row.result_full) : row.result_full;
     if (result) {
-      // Reconstruct containers properly
       AppState.results = [result];
       AppState.chosenAlgo = result;
       document.getElementById('nav-results').style.display = '';
@@ -285,19 +315,16 @@ async function openSavedLoading(id) {
       showPage('input');
     }
     toggleSavedPanel(false);
-    toast(`Loaded: ${row.master_ref}`, 'success');
-  } catch(e) {
-    toast('Failed to open: ' + e.message, 'error');
-  }
+    toast(`Opened: ${row.master_ref}`, 'success');
+  } catch(e) { toast('Failed to open: ' + e.message, 'error'); }
 }
 
 async function copySavedLoading(id) {
   try {
-    const rows = await SB.dbReq('GET', `/loadings?id=eq.${id}&select=*`, null, AuthState.token);
+    const rows = await SB.db('GET', `/loadings?id=eq.${id}&select=*`, null, AuthState.token);
     const row = rows[0]; if (!row) return;
-    const d = new Date();
     const newRef = row.master_ref + '-COPY';
-    await SB.dbReq('POST', '/loadings', {
+    await SB.db('POST', '/loadings', {
       user_id: AuthState.user.id,
       master_ref: newRef,
       equipment_type: row.equipment_type,
@@ -307,30 +334,25 @@ async function copySavedLoading(id) {
       cargo_items: row.cargo_items,
       result_summary: row.result_summary,
       result_full: row.result_full,
-      notes: row.notes,
+      notes: row.notes || '',
     }, AuthState.token);
     toast(`Copied as "${newRef}"`, 'success');
     loadSavedLoadings();
-  } catch(e) {
-    toast('Copy failed: ' + e.message, 'error');
-  }
+  } catch(e) { toast('Copy failed: ' + e.message, 'error'); }
 }
 
 async function deleteSavedLoading(id) {
-  if (!confirm('Delete this saved loading?')) return;
+  if (!confirm('Delete this saved loading? This cannot be undone.')) return;
   try {
-    await SB.dbReq('DELETE', `/loadings?id=eq.${id}`, null, AuthState.token);
+    await SB.db('DELETE', `/loadings?id=eq.${id}`, null, AuthState.token);
     document.getElementById(`saved-${id}`)?.remove();
     toast('Deleted.', 'success');
-  } catch(e) {
-    toast('Delete failed: ' + e.message, 'error');
-  }
+  } catch(e) { toast('Delete failed: ' + e.message, 'error'); }
 }
 
 function toggleSavedPanel(force) {
   const panel = document.getElementById('savedPanel');
-  const isVisible = panel.style.display !== 'none';
-  const show = force !== undefined ? force : !isVisible;
+  const show = force !== undefined ? force : panel.style.display === 'none';
   panel.style.display = show ? 'flex' : 'none';
   if (show) loadSavedLoadings();
 }
