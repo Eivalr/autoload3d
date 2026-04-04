@@ -1,12 +1,11 @@
 /* =============================================
    auth.js — Supabase Auth + Saved Loadings
-   Supports new sb_publishable key format
    ============================================= */
 
 'use strict';
 
 const SUPABASE_URL = 'https://kxybwmmkqcdnwemtrxzq.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_B8xnwHjMoOCtxByuxUkb2A_9UL9xFLy';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4eWJ3bW1rcWNkbndlbXRyeHpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNjY5ODEsImV4cCI6MjA5MDg0Mjk4MX0.2_uLgzy08F2LAa5-HTorPH7vqogeYhe49H4UF8E_q8c';
 
 // ── SUPABASE CLIENT ──────────────────────────
 const SB = {
@@ -53,10 +52,7 @@ async function initAuth() {
   }
 }
 
-// Extract user + token from any Supabase auth response (handles both old and new formats)
 function setSession(data) {
-  // New format: data.session.access_token + data.user
-  // Old format: data.access_token + data.user
   const token = data?.session?.access_token || data?.access_token;
   const refreshToken = data?.session?.refresh_token || data?.refresh_token;
   const user = data?.user;
@@ -78,7 +74,6 @@ function onAuthReady() {
   document.getElementById('appShell').style.display = 'block';
   updateUserBadge();
   loadSavedLoadings();
-  // Also init the main app
   if (typeof genRef === 'function') {
     genRef(); updateEquipPreview(); renderItemList();
     document.getElementById('page-input').style.display = 'block';
@@ -117,46 +112,29 @@ async function doRegister() {
   if (pass.length < 6) { authError('Password must be at least 6 characters.'); return; }
   setAuthLoading(true);
   try {
-    // Step 1: Sign up
     const signupData = await SB.auth('POST', '/signup', {
       email, password: pass,
       options: { emailRedirectTo: window.location.href }
     });
-
-    // Step 2: Try to get a session — may need email confirmation
     const token = signupData?.session?.access_token || signupData?.access_token;
     const user = signupData?.user;
-
     if (!user) throw new Error('Signup failed — no user returned.');
-
     if (!token) {
-      // Email confirmation required
-      authError('');
       document.getElementById('authError').style.color = 'var(--green)';
       document.getElementById('authError').textContent = 'Account created! Check your email to confirm, then sign in.';
       setAuthMode('login');
       setAuthLoading(false);
       return;
     }
-
-    // Step 3: Set session and create profile
     AuthState.token = token;
     AuthState.user = user;
     const refreshToken = signupData?.session?.refresh_token || signupData?.refresh_token;
     Session.set({ access_token: token, refresh_token: refreshToken });
-
-    // Step 4: Create profile row
     try {
       await SB.db('POST', '/profiles', {
-        user_id: user.id,
-        full_name: name,
-        company_name: company || null,
+        user_id: user.id, full_name: name, company_name: company || null,
       }, token);
-    } catch(profileErr) {
-      // Profile creation failed but auth succeeded — not fatal
-      console.warn('Profile creation failed:', profileErr.message);
-    }
-
+    } catch(e) { console.warn('Profile creation failed:', e.message); }
     await loadProfile();
     onAuthReady();
   } catch(e) {
@@ -210,7 +188,7 @@ function handleAuthSubmit() {
   else doRegister();
 }
 
-// ── SAVED LOADINGS ────────────────────────────
+// ── SAVE LOADING ─────────────────────────────
 async function saveCurrentLoading() {
   if (!AppState.chosenAlgo) { toast('No result to save.', 'error'); return; }
   if (!AuthState.token) { toast('Please sign in to save.', 'error'); return; }
@@ -240,13 +218,14 @@ async function saveCurrentLoading() {
 
   try {
     await SB.db('POST', '/loadings', payload, AuthState.token);
-    toast(`"${masterRef}" saved successfully.`, 'success');
+    toast(`"${masterRef}" saved.`, 'success');
     loadSavedLoadings();
   } catch(e) {
     toast('Save failed: ' + e.message, 'error');
   }
 }
 
+// ── LOAD SAVED LIST ───────────────────────────
 async function loadSavedLoadings() {
   if (!AuthState.token) return;
   try {
@@ -265,17 +244,13 @@ function renderSavedList(rows) {
     return;
   }
   el.innerHTML = rows.map(r => {
-    const s = r.result_summary || {};
+    const s = typeof r.result_summary === 'string' ? JSON.parse(r.result_summary) : (r.result_summary || {});
     const d = new Date(r.created_at).toLocaleDateString();
-    const totW = typeof s === 'string' ? JSON.parse(s).totalWeight : s.totalWeight;
-    const totCBM = typeof s === 'string' ? JSON.parse(s).totalCBM : s.totalCBM;
-    const ctrs = typeof s === 'string' ? JSON.parse(s).totalContainers : s.totalContainers;
-    const util = typeof s === 'string' ? JSON.parse(s).avgUtilization : s.avgUtilization;
     return `<div class="saved-row" id="saved-${r.id}">
       <div class="saved-info" onclick="openSavedLoading('${r.id}')">
         <div class="saved-ref">${r.master_ref}</div>
-        <div class="saved-meta">${r.equipment_name || ''} · ${r.algorithm || ''} · ${ctrs || '?'} CTR · ${parseFloat(util||0).toFixed(1)}% util</div>
-        <div class="saved-meta">${d} · ${parseFloat(totW||0).toFixed(0)}kg · ${parseFloat(totCBM||0).toFixed(2)}m³</div>
+        <div class="saved-meta">${r.equipment_name || ''} · ${r.algorithm || ''} · ${s.totalContainers || '?'} CTR · ${parseFloat(s.avgUtilization||0).toFixed(1)}% util</div>
+        <div class="saved-meta">${d} · ${parseFloat(s.totalWeight||0).toFixed(0)}kg · ${parseFloat(s.totalCBM||0).toFixed(2)}m³</div>
         ${r.notes ? `<div class="saved-notes">${r.notes}</div>` : ''}
       </div>
       <div class="saved-actions">
@@ -286,22 +261,19 @@ function renderSavedList(rows) {
   }).join('');
 }
 
+// ── OPEN SAVED ────────────────────────────────
 async function openSavedLoading(id) {
   try {
     const rows = await SB.db('GET', `/loadings?id=eq.${id}&select=*`, null, AuthState.token);
     const row = rows[0]; if (!row) return;
-
     AppState.items = Array.isArray(row.cargo_items) ? row.cargo_items : JSON.parse(row.cargo_items || '[]');
     renderItemList();
-
     const eqType = row.equipment_type || 'sea';
     const tabs = document.querySelectorAll('.equip-tab');
     const typeMap = ['auto','air','sea','truck','custom'];
     const tabIdx = typeMap.indexOf(eqType);
     if (tabIdx >= 0 && tabs[tabIdx]) setEquipType(eqType, tabs[tabIdx]);
-
     document.getElementById('masterRef').value = row.master_ref;
-
     const result = typeof row.result_full === 'string' ? JSON.parse(row.result_full) : row.result_full;
     if (result) {
       AppState.results = [result];
@@ -319,14 +291,14 @@ async function openSavedLoading(id) {
   } catch(e) { toast('Failed to open: ' + e.message, 'error'); }
 }
 
+// ── COPY SAVED ────────────────────────────────
 async function copySavedLoading(id) {
   try {
     const rows = await SB.db('GET', `/loadings?id=eq.${id}&select=*`, null, AuthState.token);
     const row = rows[0]; if (!row) return;
-    const newRef = row.master_ref + '-COPY';
     await SB.db('POST', '/loadings', {
       user_id: AuthState.user.id,
-      master_ref: newRef,
+      master_ref: row.master_ref + '-COPY',
       equipment_type: row.equipment_type,
       equipment_id: row.equipment_id,
       equipment_name: row.equipment_name,
@@ -336,13 +308,14 @@ async function copySavedLoading(id) {
       result_full: row.result_full,
       notes: row.notes || '',
     }, AuthState.token);
-    toast(`Copied as "${newRef}"`, 'success');
+    toast(`Copied as "${row.master_ref}-COPY"`, 'success');
     loadSavedLoadings();
   } catch(e) { toast('Copy failed: ' + e.message, 'error'); }
 }
 
+// ── DELETE SAVED ──────────────────────────────
 async function deleteSavedLoading(id) {
-  if (!confirm('Delete this saved loading? This cannot be undone.')) return;
+  if (!confirm('Delete this saved loading?')) return;
   try {
     await SB.db('DELETE', `/loadings?id=eq.${id}`, null, AuthState.token);
     document.getElementById(`saved-${id}`)?.remove();
@@ -350,6 +323,7 @@ async function deleteSavedLoading(id) {
   } catch(e) { toast('Delete failed: ' + e.message, 'error'); }
 }
 
+// ── TOGGLE PANEL ──────────────────────────────
 function toggleSavedPanel(force) {
   const panel = document.getElementById('savedPanel');
   const show = force !== undefined ? force : panel.style.display === 'none';
