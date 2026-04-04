@@ -7,28 +7,22 @@
 const SUPABASE_URL = 'https://kxybwmmkqcdnwemtrxzq.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4eWJ3bW1rcWNkbndlbXRyeHpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyNjY5ODEsImV4cCI6MjA5MDg0Mjk4MX0.2_uLgzy08F2LAa5-HTorPH7vqogeYhe49H4UF8E_q8c';
 
-// ── SUPABASE CLIENT ──────────────────────────
 const SB = {
   async req(method, path, body = null, token = null) {
     const headers = { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${SUPABASE_URL}${path}`, {
-      method, headers,
-      body: body ? JSON.stringify(body) : null,
+      method, headers, body: body ? JSON.stringify(body) : null,
     });
     let data;
     try { data = await res.json(); } catch { data = {}; }
-    if (!res.ok) {
-      const msg = data.error_description || data.message || data.msg || data.error || JSON.stringify(data);
-      throw new Error(msg);
-    }
+    if (!res.ok) throw new Error(data.error_description || data.message || data.msg || data.error || JSON.stringify(data));
     return data;
   },
   auth(method, path, body) { return this.req(method, `/auth/v1${path}`, body); },
   db(method, path, body, token) { return this.req(method, `/rest/v1${path}`, body, token); },
 };
 
-// ── SESSION ──────────────────────────────────
 const Session = {
   get() { try { return JSON.parse(localStorage.getItem('al3d_session')); } catch { return null; } },
   set(s) { localStorage.setItem('al3d_session', JSON.stringify(s)); },
@@ -37,7 +31,6 @@ const Session = {
 
 let AuthState = { user: null, token: null, profile: null };
 
-// ── INIT ─────────────────────────────────────
 async function initAuth() {
   const s = Session.get();
   if (!s?.refresh_token) return showAuthModal('login');
@@ -46,10 +39,7 @@ async function initAuth() {
     setSession(data);
     await loadProfile();
     onAuthReady();
-  } catch(e) {
-    Session.clear();
-    showAuthModal('login');
-  }
+  } catch(e) { Session.clear(); showAuthModal('login'); }
 }
 
 function setSession(data) {
@@ -57,8 +47,7 @@ function setSession(data) {
   const refreshToken = data?.session?.refresh_token || data?.refresh_token;
   const user = data?.user;
   if (!token || !user) throw new Error('Invalid session response from Supabase');
-  AuthState.token = token;
-  AuthState.user = user;
+  AuthState.token = token; AuthState.user = user;
   Session.set({ access_token: token, refresh_token: refreshToken });
 }
 
@@ -86,7 +75,6 @@ function updateUserBadge() {
   document.getElementById('userBadge').textContent = company ? `${name} · ${company}` : name;
 }
 
-// ── LOGIN ─────────────────────────────────────
 async function doLogin() {
   const email = document.getElementById('authEmail').value.trim();
   const pass = document.getElementById('authPass').value;
@@ -94,15 +82,12 @@ async function doLogin() {
   setAuthLoading(true);
   try {
     const data = await SB.auth('POST', '/token?grant_type=password', { email, password: pass });
-    setSession(data);
-    await loadProfile();
-    onAuthReady();
+    setSession(data); await loadProfile(); onAuthReady();
   } catch(e) {
     authError(e.message.includes('Invalid login') ? 'Invalid email or password.' : e.message);
   } finally { setAuthLoading(false); }
 }
 
-// ── REGISTER ──────────────────────────────────
 async function doRegister() {
   const email = document.getElementById('authEmail').value.trim();
   const pass = document.getElementById('authPass').value;
@@ -113,8 +98,7 @@ async function doRegister() {
   setAuthLoading(true);
   try {
     const signupData = await SB.auth('POST', '/signup', {
-      email, password: pass,
-      options: { emailRedirectTo: window.location.href }
+      email, password: pass, options: { emailRedirectTo: window.location.href }
     });
     const token = signupData?.session?.access_token || signupData?.access_token;
     const user = signupData?.user;
@@ -122,35 +106,25 @@ async function doRegister() {
     if (!token) {
       document.getElementById('authError').style.color = 'var(--green)';
       document.getElementById('authError').textContent = 'Account created! Check your email to confirm, then sign in.';
-      setAuthMode('login');
-      setAuthLoading(false);
-      return;
+      setAuthMode('login'); setAuthLoading(false); return;
     }
-    AuthState.token = token;
-    AuthState.user = user;
-    const refreshToken = signupData?.session?.refresh_token || signupData?.refresh_token;
-    Session.set({ access_token: token, refresh_token: refreshToken });
+    AuthState.token = token; AuthState.user = user;
+    Session.set({ access_token: token, refresh_token: signupData?.session?.refresh_token || signupData?.refresh_token });
     try {
-      await SB.db('POST', '/profiles', {
-        user_id: user.id, full_name: name, company_name: company || null,
-      }, token);
+      await SB.db('POST', '/profiles', { user_id: user.id, full_name: name, company_name: company || null }, token);
     } catch(e) { console.warn('Profile creation failed:', e.message); }
-    await loadProfile();
-    onAuthReady();
+    await loadProfile(); onAuthReady();
   } catch(e) {
     authError(e.message.includes('already registered') ? 'This email is already registered. Try signing in.' : e.message);
   } finally { setAuthLoading(false); }
 }
 
-// ── LOGOUT ───────────────────────────────────
 function doLogout() {
-  Session.clear();
-  AuthState = { user: null, token: null, profile: null };
+  Session.clear(); AuthState = { user: null, token: null, profile: null };
   document.getElementById('appShell').style.display = 'none';
   showAuthModal('login');
 }
 
-// ── MODAL UI ─────────────────────────────────
 function showAuthModal(mode) {
   document.getElementById('authModal').style.display = 'flex';
   document.getElementById('appShell').style.display = 'none';
@@ -172,8 +146,7 @@ function setAuthMode(mode) {
 
 function authError(msg) {
   const el = document.getElementById('authError');
-  el.style.color = 'var(--red)';
-  el.textContent = msg;
+  el.style.color = 'var(--red)'; el.textContent = msg;
 }
 
 function setAuthLoading(v) {
@@ -188,44 +161,27 @@ function handleAuthSubmit() {
   else doRegister();
 }
 
-// ── SAVE LOADING ─────────────────────────────
 async function saveCurrentLoading() {
   if (!AppState.chosenAlgo) { toast('No result to save.', 'error'); return; }
   if (!AuthState.token) { toast('Please sign in to save.', 'error'); return; }
-
   const masterRef = document.getElementById('masterRef').value || 'AUTO';
   const eq = AppState.chosenAlgo.containers[0]?.eq;
   const totW = AppState.chosenAlgo.containers.reduce((s,c)=>s+c.loadedWeight,0);
   const totCBM = AppState.chosenAlgo.containers.reduce((s,c)=>s+c.loadedCBM,0);
-
   const payload = {
-    user_id: AuthState.user.id,
-    master_ref: masterRef,
-    equipment_type: currentEquipType,
-    equipment_id: eq?.id || 'CUSTOM',
-    equipment_name: eq?.name || 'Custom',
-    algorithm: AppState.chosenAlgo.algorithm,
-    cargo_items: AppState.items,
-    result_summary: {
-      totalContainers: AppState.chosenAlgo.totalContainers,
-      avgUtilization: AppState.chosenAlgo.avgUtilization,
-      totalWeight: totW,
-      totalCBM: totCBM,
-    },
-    result_full: AppState.chosenAlgo,
-    notes: '',
+    user_id: AuthState.user.id, master_ref: masterRef,
+    equipment_type: currentEquipType, equipment_id: eq?.id || 'CUSTOM', equipment_name: eq?.name || 'Custom',
+    algorithm: AppState.chosenAlgo.algorithm, cargo_items: AppState.items,
+    result_summary: { totalContainers: AppState.chosenAlgo.totalContainers, avgUtilization: AppState.chosenAlgo.avgUtilization, totalWeight: totW, totalCBM: totCBM },
+    result_full: AppState.chosenAlgo, notes: '',
   };
-
   try {
     await SB.db('POST', '/loadings', payload, AuthState.token);
     toast(`"${masterRef}" saved.`, 'success');
     loadSavedLoadings();
-  } catch(e) {
-    toast('Save failed: ' + e.message, 'error');
-  }
+  } catch(e) { toast('Save failed: ' + e.message, 'error'); }
 }
 
-// ── LOAD SAVED LIST ───────────────────────────
 async function loadSavedLoadings() {
   if (!AuthState.token) return;
   try {
@@ -237,8 +193,7 @@ async function loadSavedLoadings() {
 }
 
 function renderSavedList(rows) {
-  const el = document.getElementById('savedList');
-  if (!el) return;
+  const el = document.getElementById('savedList'); if (!el) return;
   if (!rows.length) {
     el.innerHTML = `<div class="saved-empty">No saved loadings yet.<br>Run a calculation and click <strong>Save</strong>.</div>`;
     return;
@@ -254,14 +209,13 @@ function renderSavedList(rows) {
         ${r.notes ? `<div class="saved-notes">${r.notes}</div>` : ''}
       </div>
       <div class="saved-actions">
-        <button class="saved-btn" onclick="copySavedLoading('${r.id}')" title="Copy">⎘</button>
-        <button class="saved-btn saved-btn-del" onclick="deleteSavedLoading('${r.id}')" title="Delete">✕</button>
+        <button class="saved-btn" onclick="copySavedLoading('${r.id}')" title="Copy">&#8685;</button>
+        <button class="saved-btn saved-btn-del" onclick="deleteSavedLoading('${r.id}')" title="Delete">&#10005;</button>
       </div>
     </div>`;
   }).join('');
 }
 
-// ── OPEN SAVED ────────────────────────────────
 async function openSavedLoading(id) {
   try {
     const rows = await SB.db('GET', `/loadings?id=eq.${id}&select=*`, null, AuthState.token);
@@ -281,7 +235,8 @@ async function openSavedLoading(id) {
       document.getElementById('nav-results').style.display = '';
       document.getElementById('nav-guided').style.display = '';
       showPage('results');
-      renderAlgoComparison([result], result.containers[0]?.eq, null);
+      // FIX: use renderAlgoSwitcher (new function), not renderAlgoComparison (removed)
+      renderAlgoSwitcher([result], result.containers[0]?.eq, null, 0);
       chooseAlgorithm(0, false);
     } else {
       showPage('input');
@@ -291,29 +246,22 @@ async function openSavedLoading(id) {
   } catch(e) { toast('Failed to open: ' + e.message, 'error'); }
 }
 
-// ── COPY SAVED ────────────────────────────────
 async function copySavedLoading(id) {
   try {
     const rows = await SB.db('GET', `/loadings?id=eq.${id}&select=*`, null, AuthState.token);
     const row = rows[0]; if (!row) return;
     await SB.db('POST', '/loadings', {
-      user_id: AuthState.user.id,
-      master_ref: row.master_ref + '-COPY',
-      equipment_type: row.equipment_type,
-      equipment_id: row.equipment_id,
-      equipment_name: row.equipment_name,
-      algorithm: row.algorithm,
-      cargo_items: row.cargo_items,
-      result_summary: row.result_summary,
-      result_full: row.result_full,
-      notes: row.notes || '',
+      user_id: AuthState.user.id, master_ref: row.master_ref + '-COPY',
+      equipment_type: row.equipment_type, equipment_id: row.equipment_id,
+      equipment_name: row.equipment_name, algorithm: row.algorithm,
+      cargo_items: row.cargo_items, result_summary: row.result_summary,
+      result_full: row.result_full, notes: row.notes || '',
     }, AuthState.token);
     toast(`Copied as "${row.master_ref}-COPY"`, 'success');
     loadSavedLoadings();
   } catch(e) { toast('Copy failed: ' + e.message, 'error'); }
 }
 
-// ── DELETE SAVED ──────────────────────────────
 async function deleteSavedLoading(id) {
   if (!confirm('Delete this saved loading?')) return;
   try {
@@ -323,7 +271,6 @@ async function deleteSavedLoading(id) {
   } catch(e) { toast('Delete failed: ' + e.message, 'error'); }
 }
 
-// ── TOGGLE PANEL ──────────────────────────────
 function toggleSavedPanel(force) {
   const panel = document.getElementById('savedPanel');
   const show = force !== undefined ? force : panel.style.display === 'none';

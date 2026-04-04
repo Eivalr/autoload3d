@@ -4,8 +4,8 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AutoLoad 3D Planner</title>
-  <link rel="stylesheet" href="style.css"/>
-  <link rel="stylesheet" href="auth.css"/>
+  <link rel="stylesheet" href="style.css?v=5"/>
+  <link rel="stylesheet" href="auth.css?v=5"/>
 </head>
 <body>
 
@@ -79,7 +79,6 @@
 <div id="page-input" class="page active">
   <div class="input-layout">
 
-    <!-- LEFT: Config -->
     <div class="input-col input-col-left">
       <div class="col-section">
         <div class="section-label">Master Reference</div>
@@ -166,10 +165,7 @@
       </div>
     </div>
 
-    <!-- RIGHT: Add form + Cargo table -->
     <div class="input-col input-col-right">
-
-      <!-- ADD ITEM FORM -->
       <div class="col-section">
         <div class="section-label">Add Cargo Item</div>
         <div class="cargo-form">
@@ -212,7 +208,6 @@
         </div>
       </div>
 
-      <!-- CARGO TABLE -->
       <div class="col-section cargo-list-section">
         <div class="area-header">
           <span class="area-title">Cargo Items <span class="badge" id="itemBadge">0</span></span>
@@ -222,7 +217,6 @@
           <div class="empty-msg"><div class="empty-ico">&#9638;</div><p>No items yet. Fill in the form above and click Add Item.</p></div>
         </div>
       </div>
-
     </div>
   </div>
 </div>
@@ -231,8 +225,6 @@
 <div id="page-results" class="page" style="display:none">
   <div class="results-layout">
     <div id="resultsMain" style="display:none">
-
-      <!-- TOP BAR -->
       <div class="results-topbar">
         <div class="results-topbar-left">
           <button class="btn-ghost" onclick="showPage('input')">&#8592; Back</button>
@@ -249,13 +241,11 @@
         </div>
       </div>
 
-      <!-- ALGORITHM SWITCHER BAR (compact, always visible) -->
       <div class="algo-switcher-bar" id="algoSwitcherBar">
         <span class="algo-switcher-label">Algorithm:</span>
         <div class="algo-pills" id="algoSwitcherCards"></div>
       </div>
 
-      <!-- RESULTS BODY -->
       <div class="results-body">
         <div class="viewers-and-table">
           <div class="viewers-grid" id="viewersGrid"></div>
@@ -288,12 +278,12 @@
   <div class="about-wrap">
     <h1>How AutoLoad 3D Works</h1>
     <div class="about-grid">
-      <div class="about-card"><div class="about-n">01</div><h3>Input Cargo</h3><p>Add items manually or via CSV. The cargo list shows as a table for full overview of all shipments, dimensions, and stacking rules.</p></div>
-      <div class="about-card"><div class="about-n">02</div><h3>Auto Algorithm</h3><p>Runs LAFF, DBLF, and Layer Builder automatically. Picks the best result by utilization. Switch between algorithms with one click.</p></div>
+      <div class="about-card"><div class="about-n">01</div><h3>Input Cargo</h3><p>Add items manually or via CSV. The cargo list shows as a table with full overview of shipments, dimensions, and stacking rules.</p></div>
+      <div class="about-card"><div class="about-n">02</div><h3>Auto Algorithm</h3><p>Runs LAFF, DBLF, and Layer Builder automatically. Picks the best by utilization. Switch between algorithms with one click on the results page.</p></div>
       <div class="about-card"><div class="about-n">03</div><h3>Realistic Constraints</h3><p>Stacking priority, crush limits, COG checks, and weight distribution enforced — not just volume optimization.</p></div>
       <div class="about-card"><div class="about-n">04</div><h3>All Equipment</h3><p>Auto-selects optimal equipment, or choose Air ULDs, sea containers, trucks with axle limits, or custom equipment.</p></div>
       <div class="about-card"><div class="about-n">05</div><h3>3D Visualization</h3><p>Interactive viewer per container — drag, zoom, wireframe, explode, shipment ID painted on every box face.</p></div>
-      <div class="about-card"><div class="about-n">06</div><h3>Save & Export</h3><p>Save loadings to your account. Export PDF with step-by-step sequence, CSV loading list, PNG snapshots, and printable Guided Loading.</p></div>
+      <div class="about-card"><div class="about-n">06</div><h3>Save &amp; Export</h3><p>Save loadings to your account. Export PDF with step-by-step sequence, CSV loading list, PNG snapshots, and Guided Loading printout.</p></div>
     </div>
   </div>
 </div>
@@ -304,11 +294,11 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="equipment.js"></script>
-<script src="algorithms.js"></script>
-<script src="viewer.js"></script>
-<script src="app.js"></script>
-<script src="auth.js"></script>
+<script src="equipment.js?v=5"></script>
+<script src="algorithms.js?v=5"></script>
+<script src="viewer.js?v=5"></script>
+<script src="app.js?v=5"></script>
+<script src="auth.js?v=5"></script>
 <script>
   document.addEventListener('DOMContentLoaded', () => { initAuth(); });
 </script>
