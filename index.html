@@ -12,9 +12,12 @@
 <!-- ══ AUTH MODAL ══ -->
 <div id="authModal" class="auth-overlay">
   <div class="auth-box">
-    <div class="auth-logo">
-      <span class="logo-mark">&#9638;</span>
-      <span class="logo-text">AutoLoad<span class="logo-accent">3D</span></span>
+    <div class="auth-topbar">
+      <div class="auth-logo">
+        <span class="logo-mark">&#9638;</span>
+        <span class="logo-text">AutoLoad<span class="logo-accent">3D</span></span>
+      </div>
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme"><span class="theme-icon">&#9680;</span></button>
     </div>
     <h2 class="auth-title" id="authTitle">Sign In</h2>
     <div id="authNameRow" style="display:none" class="auth-field">
@@ -63,20 +66,20 @@
   </div>
 </header>
 
-<!-- ══ SAVED LOADINGS PANEL ══ -->
+<!-- ══ SAVED PANEL ══ -->
 <div id="savedPanel" class="saved-panel" style="display:none">
   <div class="saved-panel-header">
     <span class="area-title">&#128190; My Saved Loadings</span>
     <button class="btn-ghost-xs" onclick="toggleSavedPanel(false)">Close &#10005;</button>
   </div>
-  <div id="savedList" class="saved-list">
-    <div class="saved-empty">Loading...</div>
-  </div>
+  <div id="savedList" class="saved-list"><div class="saved-empty">Loading...</div></div>
 </div>
 
 <!-- ══ PAGE: INPUT ══ -->
 <div id="page-input" class="page active">
   <div class="input-layout">
+
+    <!-- LEFT: Config -->
     <div class="input-col input-col-left">
       <div class="col-section">
         <div class="section-label">Master Reference</div>
@@ -89,15 +92,15 @@
       <div class="col-section">
         <div class="section-label">Equipment Type</div>
         <div class="equip-tabs">
-          <button class="equip-tab" onclick="setEquipType('auto',this)">&#9889; Auto</button>
-          <button class="equip-tab active" onclick="setEquipType('air',this)">Air ULD</button>
-          <button class="equip-tab" onclick="setEquipType('sea',this)">Sea</button>
-          <button class="equip-tab" onclick="setEquipType('truck',this)">Truck</button>
-          <button class="equip-tab" onclick="setEquipType('custom',this)">Custom</button>
+          <button class="equip-tab active" onclick="setEquipType('auto',this)">&#9889; Auto</button>
+          <button class="equip-tab" onclick="setEquipType('air',this)">&#9992; Air ULD</button>
+          <button class="equip-tab" onclick="setEquipType('sea',this)">&#128674; Sea</button>
+          <button class="equip-tab" onclick="setEquipType('truck',this)">&#128666; Truck</button>
+          <button class="equip-tab" onclick="setEquipType('custom',this)">&#9881; Custom</button>
         </div>
-        <div id="equip-auto" class="equip-panel">
+        <div id="equip-auto" class="equip-panel active">
           <div class="auto-equip-info">
-            <p>&#9889; System tests all equipment and recommends optimal mix.</p>
+            <p>&#9889; System tests all equipment types and recommends the optimal choice automatically.</p>
             <div class="form-row" style="margin-top:8px">
               <div class="fc"><label class="sub-lbl">Preferred Mode</label>
                 <select id="auto-mode" class="inp sm">
@@ -110,7 +113,7 @@
             </div>
           </div>
         </div>
-        <div id="equip-air" class="equip-panel active">
+        <div id="equip-air" class="equip-panel">
           <select id="uld-select" class="inp" onchange="updateEquipPreview()">
             <option value="LD1">LD-1 (AKE) — 156x153x163 cm</option>
             <option value="LD3">LD-3 (AKH) — 201x153x163 cm</option>
@@ -163,7 +166,10 @@
       </div>
     </div>
 
+    <!-- RIGHT: Add form + Cargo table -->
     <div class="input-col input-col-right">
+
+      <!-- ADD ITEM FORM -->
       <div class="col-section">
         <div class="section-label">Add Cargo Item</div>
         <div class="cargo-form">
@@ -193,7 +199,7 @@
               <select id="ci-prio" class="inp sm">
                 <option value="3">3 - Strong Base</option>
                 <option value="2" selected>2 - Medium</option>
-                <option value="1">1 - Fragile</option>
+                <option value="1">1 - Fragile Top</option>
                 <option value="0">0 - No Stack</option>
               </select>
             </div>
@@ -206,15 +212,17 @@
         </div>
       </div>
 
+      <!-- CARGO TABLE -->
       <div class="col-section cargo-list-section">
         <div class="area-header">
           <span class="area-title">Cargo Items <span class="badge" id="itemBadge">0</span></span>
           <button class="btn-ghost-xs" onclick="clearItems()">Clear all</button>
         </div>
-        <div id="cargoTable" class="cargo-table">
-          <div class="empty-msg"><div class="empty-ico">&#9638;</div><p>No items yet. Fill in the form above.</p></div>
+        <div id="cargoTable">
+          <div class="empty-msg"><div class="empty-ico">&#9638;</div><p>No items yet. Fill in the form above and click Add Item.</p></div>
         </div>
       </div>
+
     </div>
   </div>
 </div>
@@ -222,11 +230,9 @@
 <!-- ══ PAGE: RESULTS ══ -->
 <div id="page-results" class="page" style="display:none">
   <div class="results-layout">
-    <div id="algoPickWrap" style="display:none">
-      <div id="autoBannerResult" style="display:none"></div>
-      <div class="algo-cards" id="algoCards"></div>
-    </div>
     <div id="resultsMain" style="display:none">
+
+      <!-- TOP BAR -->
       <div class="results-topbar">
         <div class="results-topbar-left">
           <button class="btn-ghost" onclick="showPage('input')">&#8592; Back</button>
@@ -235,7 +241,6 @@
           <span class="results-auto-badge" id="resultsAutoBadge" style="display:none">&#9733; Auto</span>
         </div>
         <div class="results-topbar-right">
-          <button class="tbtn" onclick="toggleAlgoPicker()">Compare Algorithms</button>
           <button class="tbtn save-btn" onclick="saveCurrentLoading()">&#128190; Save</button>
           <button class="tbtn" onclick="doExportPDF()">&#8595; PDF</button>
           <button class="tbtn" onclick="exportLoadingCSV()">&#8595; CSV</button>
@@ -243,13 +248,14 @@
           <button class="tbtn" onclick="showPage('guided')">Guided Loading</button>
         </div>
       </div>
-      <div id="algoSwitcher" class="algo-switcher" style="display:none">
-        <div class="algo-switcher-header">
-          <span class="section-label">Switch Algorithm</span>
-          <button class="btn-ghost-xs" onclick="document.getElementById('algoSwitcher').style.display='none'">Close &#10005;</button>
-        </div>
-        <div class="algo-cards-inline" id="algoCardsInline"></div>
+
+      <!-- ALGORITHM SWITCHER BAR (compact, always visible) -->
+      <div class="algo-switcher-bar" id="algoSwitcherBar">
+        <span class="algo-switcher-label">Algorithm:</span>
+        <div class="algo-pills" id="algoSwitcherCards"></div>
       </div>
+
+      <!-- RESULTS BODY -->
       <div class="results-body">
         <div class="viewers-and-table">
           <div class="viewers-grid" id="viewersGrid"></div>
@@ -282,12 +288,12 @@
   <div class="about-wrap">
     <h1>How AutoLoad 3D Works</h1>
     <div class="about-grid">
-      <div class="about-card"><div class="about-n">01</div><h3>Input Cargo</h3><p>Add items manually or via CSV. Download the template for the exact format.</p></div>
-      <div class="about-card"><div class="about-n">02</div><h3>Auto Algorithm</h3><p>Runs LAFF, DBLF, and Layer Builder, selects the best result automatically. Compare and switch if needed.</p></div>
-      <div class="about-card"><div class="about-n">03</div><h3>Realistic Constraints</h3><p>Stacking priority, crush limits, COG checks, and weight distribution enforced.</p></div>
-      <div class="about-card"><div class="about-n">04</div><h3>All Equipment</h3><p>Air ULDs, sea containers, trucks with axle limits, and custom equipment.</p></div>
-      <div class="about-card"><div class="about-n">05</div><h3>3D Visualization</h3><p>Interactive viewer per container — drag, zoom, wireframe, explode, shipment ID on every box.</p></div>
-      <div class="about-card"><div class="about-n">06</div><h3>Save & Share</h3><p>Save loadings to your account, reopen and edit anytime. Export PDF, CSV, and PNG snapshots.</p></div>
+      <div class="about-card"><div class="about-n">01</div><h3>Input Cargo</h3><p>Add items manually or via CSV. The cargo list shows as a table for full overview of all shipments, dimensions, and stacking rules.</p></div>
+      <div class="about-card"><div class="about-n">02</div><h3>Auto Algorithm</h3><p>Runs LAFF, DBLF, and Layer Builder automatically. Picks the best result by utilization. Switch between algorithms with one click.</p></div>
+      <div class="about-card"><div class="about-n">03</div><h3>Realistic Constraints</h3><p>Stacking priority, crush limits, COG checks, and weight distribution enforced — not just volume optimization.</p></div>
+      <div class="about-card"><div class="about-n">04</div><h3>All Equipment</h3><p>Auto-selects optimal equipment, or choose Air ULDs, sea containers, trucks with axle limits, or custom equipment.</p></div>
+      <div class="about-card"><div class="about-n">05</div><h3>3D Visualization</h3><p>Interactive viewer per container — drag, zoom, wireframe, explode, shipment ID painted on every box face.</p></div>
+      <div class="about-card"><div class="about-n">06</div><h3>Save & Export</h3><p>Save loadings to your account. Export PDF with step-by-step sequence, CSV loading list, PNG snapshots, and printable Guided Loading.</p></div>
     </div>
   </div>
 </div>
