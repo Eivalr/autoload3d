@@ -14,14 +14,14 @@
       <span class="logo-mark">▦</span>
       <span class="logo-text">AutoLoad<span class="logo-accent">3D</span></span>
     </div>
-    <nav class="header-nav" id="mainNav">
+    <nav class="header-nav">
       <button class="nav-btn active" onclick="showPage('input')">Input</button>
       <button class="nav-btn" id="nav-results" onclick="showPage('results')" style="display:none">Results</button>
       <button class="nav-btn" id="nav-guided" onclick="showPage('guided')" style="display:none">Guided Loading</button>
       <button class="nav-btn" onclick="showPage('about')">How It Works</button>
     </nav>
     <div class="header-actions">
-      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme"><span class="theme-icon">◐</span></button>
+      <button class="theme-toggle" onclick="toggleTheme()"><span class="theme-icon">◐</span></button>
     </div>
   </div>
 </header>
@@ -30,9 +30,7 @@
 <div id="page-input" class="page active">
   <div class="input-layout">
 
-    <!-- LEFT COLUMN: Config -->
     <div class="input-col input-col-left">
-
       <div class="col-section">
         <div class="section-label">Master Reference</div>
         <div class="master-row">
@@ -52,7 +50,7 @@
         </div>
         <div id="equip-auto" class="equip-panel">
           <div class="auto-equip-info">
-            <p>⚡ System will test all equipment types and recommend the optimal mix — e.g. <strong>2× 20' GP + 1× 40' HC</strong>.</p>
+            <p>⚡ System tests all equipment types and recommends optimal mix.</p>
             <div class="form-row" style="margin-top:8px">
               <div class="fc"><label class="sub-lbl">Preferred Mode</label>
                 <select id="auto-mode" class="inp sm">
@@ -105,10 +103,10 @@
       <div class="col-section">
         <div class="section-label">Bulk Upload</div>
         <label class="upload-zone" for="csvFile">
-          <span class="upload-icon">↑</span><span>Drop CSV or click</span>
+          <span class="upload-icon">↑</span><span>Drop CSV or click to upload</span>
           <input type="file" id="csvFile" accept=".csv" onchange="loadCSV(event)" style="display:none"/>
         </label>
-        <a href="#" class="link-xs" onclick="dlTemplate()">↓ Download CSV template</a>
+        <a href="#" class="link-xs" onclick="dlTemplate(); return false;">↓ Download CSV template (with examples)</a>
       </div>
 
       <div class="col-section">
@@ -118,9 +116,7 @@
       </div>
     </div>
 
-    <!-- RIGHT COLUMN: Cargo Form + List -->
     <div class="input-col input-col-right">
-
       <div class="col-section">
         <div class="section-label">Add Cargo Item</div>
         <div class="cargo-form">
@@ -172,7 +168,6 @@
           <div class="empty-msg"><div class="empty-ico">▦</div><p>No items yet. Fill in the form above.</p></div>
         </div>
       </div>
-
     </div>
   </div>
 </div>
@@ -181,12 +176,11 @@
 <div id="page-results" class="page" style="display:none">
   <div class="results-layout">
 
-    <!-- Algorithm picker (shown first, hidden after choice) -->
     <div id="algoPickWrap" class="algo-pick-wrap">
       <div class="results-topbar">
         <div>
           <h2 class="results-title">Choose Algorithm</h2>
-          <p class="results-sub">All three ran on your cargo. Pick the result that works best for you.</p>
+          <p class="results-sub">All three ran on your cargo. Pick the result that works best.</p>
         </div>
         <button class="btn-ghost" onclick="showPage('input')">← Back to Input</button>
       </div>
@@ -194,7 +188,6 @@
       <div class="algo-cards" id="algoCards"></div>
     </div>
 
-    <!-- Main results (shown after picking algo) -->
     <div id="resultsMain" style="display:none">
       <div class="results-topbar">
         <div class="results-topbar-left">
@@ -204,19 +197,21 @@
         </div>
         <div class="results-topbar-right">
           <button class="tbtn" onclick="doExportPDF()">↓ PDF Report</button>
-          <button class="tbtn" onclick="doExportAllPNG()">↓ All Snapshots</button>
+          <button class="tbtn" onclick="exportLoadingCSV()">↓ Loading CSV</button>
+          <button class="tbtn" onclick="doExportAllPNG()">↓ Snapshots</button>
           <button class="tbtn" onclick="showPage('guided')">☰ Guided Loading</button>
         </div>
       </div>
 
       <div class="results-body">
-        <!-- 3D Viewers for all containers -->
-        <div class="viewers-grid" id="viewersGrid"></div>
-        <!-- Summary panel -->
+        <div class="viewers-and-table">
+          <div class="viewers-grid" id="viewersGrid"></div>
+          <!-- Full loading table -->
+          <div class="loading-table-section" id="loadingTableWrap"></div>
+        </div>
         <div class="results-summary" id="resultsSummary"></div>
       </div>
     </div>
-
   </div>
 </div>
 
@@ -241,12 +236,12 @@
   <div class="about-wrap">
     <h1>How AutoLoad 3D Works</h1>
     <div class="about-grid">
-      <div class="about-card"><div class="about-n">01</div><h3>Input Cargo</h3><p>Add items manually or via CSV. Each item carries dimensions, weight, shipment reference, stackability, and rotation rules.</p></div>
+      <div class="about-card"><div class="about-n">01</div><h3>Input Cargo</h3><p>Add items manually or via CSV. Download the template to see the exact format. Each item carries dimensions, weight, shipment reference, and stacking rules.</p></div>
       <div class="about-card"><div class="about-n">02</div><h3>Three Algorithms</h3><p>LAFF, DBLF, and Layer Builder each solve the packing problem differently. Compare all three and pick the best result.</p></div>
-      <div class="about-card"><div class="about-n">03</div><h3>Realistic Constraints</h3><p>Stacking priority, crush limits, category rules, weight distribution, and COG checks are all enforced.</p></div>
-      <div class="about-card"><div class="about-n">04</div><h3>All Equipment Types</h3><p>Air ULDs with accurate contoured shapes, sea containers, trucks with axle weight awareness, and custom equipment.</p></div>
-      <div class="about-card"><div class="about-n">05</div><h3>3D Visualization</h3><p>Interactive Three.js viewer with rotation, zoom, wireframe, explode mode, and shipment ID printed on every box.</p></div>
-      <div class="about-card"><div class="about-n">06</div><h3>Guided Loading</h3><p>Step-by-step printable instructions for warehouse staff with sequence numbers, exact positions, and rotation callouts.</p></div>
+      <div class="about-card"><div class="about-n">03</div><h3>Realistic Constraints</h3><p>Stacking priority, crush limits, category rules, weight distribution, and COG checks are all enforced — not just volume optimization.</p></div>
+      <div class="about-card"><div class="about-n">04</div><h3>All Equipment Types</h3><p>Air ULDs with accurate contoured shapes, sea containers, trucks with axle weight limits, and fully custom equipment.</p></div>
+      <div class="about-card"><div class="about-n">05</div><h3>3D Visualization</h3><p>Interactive viewer per container — drag, zoom, wireframe, explode. Shipment ID painted on every box face.</p></div>
+      <div class="about-card"><div class="about-n">06</div><h3>Export Everything</h3><p>PDF report with step-by-step loading sequence, PNG snapshots, Loading List CSV (copyable table), and Guided Loading printout.</p></div>
     </div>
   </div>
 </div>
