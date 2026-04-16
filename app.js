@@ -4,7 +4,7 @@
 
 'use strict';
 
-const AppState = { items: [], results: null, chosenAlgo: null, theme: 'dark', viewers: {} };
+const AppState = { items: [], results: null, chosenAlgo: null, theme: 'light', viewers: {} };
 
 function toggleTheme() {
   AppState.theme = AppState.theme === 'dark' ? 'light' : 'dark';
